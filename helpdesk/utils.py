@@ -526,3 +526,17 @@ def get_country_from_timezone(time_zone: str):
         "Country", {"time_zones": ["like", f"%{time_zone}%"]}, "name"
     )
     return country or None
+
+
+def get_helpdesk_url(path: str = "") -> str:
+    """Return an absolute URL into the helpdesk portal.
+
+    Uses HD Settings.helpdesk_url when set (a dedicated public domain for the
+    portal), otherwise falls back to the site URL. `path` is appended as-is.
+    """
+    base = (frappe.db.get_single_value("HD Settings", "helpdesk_url") or "").strip()
+    if not base:
+        return frappe.utils.get_url(path)
+    if not base.startswith(("http://", "https://")):
+        base = "https://" + base
+    return base.rstrip("/") + path

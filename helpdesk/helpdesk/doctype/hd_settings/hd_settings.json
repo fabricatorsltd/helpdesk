@@ -63,6 +63,8 @@
   "show_customer_portal_permission_notice",
   "persona_captured",
   "column_break_hjfh",
+  "portal_section",
+  "helpdesk_url",
   "search_tab",
   "name_weight",
   "subject_weight",
@@ -85,6 +87,18 @@
   "reply_via_agent_email_content"
  ],
  "fields": [
+  {
+   "fieldname": "portal_section",
+   "fieldtype": "Section Break",
+   "label": "Portal"
+  },
+  {
+   "description": "Public base URL of the helpdesk portal, used in notification email links. Leave empty to use the site URL. Set this when the portal is served on a dedicated domain (e.g. https://help.example.com).",
+   "fieldname": "helpdesk_url",
+   "fieldtype": "Data",
+   "label": "Helpdesk URL",
+   "options": "URL"
+  },
   {
    "fieldname": "assignment_rules_section",
    "fieldtype": "Section Break",

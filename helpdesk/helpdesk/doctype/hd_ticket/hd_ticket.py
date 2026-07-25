@@ -34,6 +34,7 @@ from helpdesk.utils import (
     get_agents_team,
     get_customers,
     get_doc_room,
+    get_helpdesk_url,
     is_admin,
     is_agent,
     publish_event,
@@ -143,7 +144,7 @@ class HDTicket(Document):
 
         last_communication = self.get_last_communication()
 
-        url = f"{frappe.utils.get_url()}/ticket-feedback/new?key={self.key}"
+        url = get_helpdesk_url(f"/ticket-feedback/new?key={self.key}")
         feedback_email_content = frappe.db.get_single_value(
             "HD Settings", "feedback_email_content"
         )
@@ -612,8 +613,7 @@ class HDTicket(Document):
 
     @property
     def portal_uri(self):
-        root_uri = frappe.utils.get_url()
-        return f"{root_uri}/helpdesk/my-tickets/{self.name}"
+        return get_helpdesk_url(f"/helpdesk/my-tickets/{self.name}")
 
     @frappe.whitelist()
     def new_comment(self, content: str, attachments: list[str] = []):
@@ -846,7 +846,7 @@ class HDTicket(Document):
                     email_content,
                     default_email_content,
                     {
-                        "ticket_url": frappe.utils.get_url(
+                        "ticket_url": get_helpdesk_url(
                             "/helpdesk/tickets/" + str(self.name)
                         ),
                         "message": message,

@@ -24,6 +24,7 @@ from helpdesk.utils import (
     agent_only,
     check_permissions,
     get_customers,
+    get_helpdesk_url,
     is_agent,
     parse_call_logs,
 )
@@ -382,8 +383,8 @@ def merge_ticket(source: str, target: str):
     c = frappe.new_doc("HD Ticket Comment")
     c.commented_by = frappe.session.user
     c.reference_ticket = target
-    source_link = frappe.utils.get_url("/helpdesk/tickets/" + str(source))
-    target_link = frappe.utils.get_url("/helpdesk/tickets/" + str(target))
+    source_link = get_helpdesk_url("/helpdesk/tickets/" + str(source))
+    target_link = get_helpdesk_url("/helpdesk/tickets/" + str(target))
     c.content = _(
         f"Ticket <a href={source_link}> #{source}</a>  has been merged with ticket #{target}."
     )
@@ -506,7 +507,7 @@ def split_ticket(subject: str, communication_id: str):
         update_modified=False,
     )
 
-    new_ticket_link = frappe.utils.get_url("/helpdesk/tickets/" + str(new_ticket))
+    new_ticket_link = get_helpdesk_url("/helpdesk/tickets/" + str(new_ticket))
 
     controller = get_controller("HD Ticket")
     controller.reply_via_agent(
