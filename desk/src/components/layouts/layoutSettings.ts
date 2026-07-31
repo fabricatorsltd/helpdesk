@@ -1,4 +1,5 @@
 import LucideBookOpen from "~icons/lucide/book-open";
+import LucideShieldCheck from "~icons/lucide/shield-check";
 import LucideContact2 from "~icons/lucide/contact-2";
 import LucideTicket from "~icons/lucide/ticket";
 import LucideLayoutDashboard from "~icons/lucide/layout-dashboard";
@@ -50,6 +51,11 @@ export const customerPortalSidebarOptions = [
     label: __("Tickets"),
     icon: LucideTicket,
     to: "TicketsCustomer",
+  },
+  {
+    label: __("SLA"),
+    icon: LucideShieldCheck,
+    to: "CustomerSla",
   },
   {
     label: __("Knowledge Base"),
