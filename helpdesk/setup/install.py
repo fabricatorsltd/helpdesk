@@ -151,19 +151,20 @@ def add_default_holiday_list():
 
 def add_default_ticket_priorities():
     ticket_priorities = {
-        "Urgent": 100,
-        "High": 200,
-        "Medium": 300,
-        "Low": 400,
+        "P1": (100, "Critica"),
+        "P2": (200, "Alta"),
+        "P3": (300, "Media"),
+        "P4": (400, "Bassa"),
     }
 
-    for priority in ticket_priorities:
+    for priority, (weight, label) in ticket_priorities.items():
         if frappe.db.exists("HD Ticket Priority", priority):
             continue
 
         doc = frappe.new_doc("HD Ticket Priority")
         doc.name = priority
-        doc.integer_value = ticket_priorities[priority]
+        doc.integer_value = weight
+        doc.description = label
         doc.insert()
 
 
