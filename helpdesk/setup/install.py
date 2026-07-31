@@ -73,50 +73,25 @@ def add_default_sla():
     sla_doc.default_sla = 1
     sla_doc.enabled = 1
 
-    low_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "Low",
-            "response_time": 60 * 60 * 24,
-            "resolution_time": 60 * 60 * 72,
-        }
-    )
+    # priority: (is_default, response_time, resolution_time)
+    sla_priorities = {
+        "P4": (0, 60 * 60 * 24, 60 * 60 * 72),
+        "P3": (1, 60 * 60 * 8, 60 * 60 * 24),
+        "P2": (0, 60 * 60 * 1, 60 * 60 * 4),
+        "P1": (0, 60 * 30, 60 * 60 * 2),
+    }
 
-    medium_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 1,
-            "priority": "Medium",
-            "response_time": 60 * 60 * 8,
-            "resolution_time": 60 * 60 * 24,
-        }
-    )
-
-    high_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "High",
-            "response_time": 60 * 60 * 1,
-            "resolution_time": 60 * 60 * 4,
-        }
-    )
-
-    urgent_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "Urgent",
-            "response_time": 60 * 30,
-            "resolution_time": 60 * 60 * 2,
-        }
-    )
-
-    sla_doc.append("priorities", low_priority)
-    sla_doc.append("priorities", medium_priority)
-    sla_doc.append("priorities", high_priority)
-    sla_doc.append("priorities", urgent_priority)
+    for priority, (is_default, response, resolution) in sla_priorities.items():
+        sla_doc.append(
+            "priorities",
+            {
+                "doctype": "HD Service Level Priority",
+                "default_priority": is_default,
+                "priority": priority,
+                "response_time": response,
+                "resolution_time": resolution,
+            },
+        )
 
     sla_doc.holiday_list = "Default"
 
@@ -150,15 +125,22 @@ def add_default_holiday_list():
 
 
 def add_default_ticket_priorities():
-    ticket_priorities = ["Urgent", "High", "Medium", "Low"]
+    # our own priority names, mapped onto upstream's level scale
+    ticket_priorities = {
+        "P1": ("Urgent", "Critica"),
+        "P2": ("High", "Alta"),
+        "P3": ("Medium", "Media"),
+        "P4": ("Low", "Bassa"),
+    }
 
-    for priority in ticket_priorities:
+    for priority, (level, label) in ticket_priorities.items():
         if frappe.db.exists("HD Ticket Priority", priority):
             continue
 
         doc = frappe.new_doc("HD Ticket Priority")
         doc.name = priority
-        doc.level = priority
+        doc.level = level
+        doc.description = label
         doc.insert()
 
 

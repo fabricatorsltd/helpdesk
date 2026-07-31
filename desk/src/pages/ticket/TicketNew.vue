@@ -19,6 +19,52 @@
       <div v-if="Boolean(template.data?.about)" class="">
         <div class="prose-f" v-html="sanitize(template.data.about)" />
       </div>
+      <!-- category + SLA policy (customer portal) -->
+      <div
+        v-if="isCustomerPortal && ticketOptions.data?.types?.length"
+        class="flex flex-col gap-4"
+      >
+        <div class="flex flex-col gap-2">
+          <span class="block text-sm text-ink-gray-7">
+            {{ __("Category") }}
+            <span class="place-self-center text-ink-red-5"> * </span>
+          </span>
+          <FormControl
+            type="select"
+            :options="categoryOptions"
+            v-model="selectedType"
+            :placeholder="__('Select a category')"
+          />
+        </div>
+        <div
+          v-if="slaPolicy.data?.applies"
+          class="flex flex-col gap-3 rounded border border-outline-gray-2 bg-surface-gray-1 p-4"
+        >
+          <div class="prose-f text-sm" v-html="sanitize(slaPolicy.data.policy_html)" />
+          <div class="flex flex-col gap-2">
+            <span class="block text-sm text-ink-gray-7">
+              {{ __("Priority level") }}
+              <span class="place-self-center text-ink-red-5"> * </span>
+            </span>
+            <FormControl
+              type="select"
+              :options="levelOptions"
+              v-model="selectedLevel"
+              :placeholder="__('Select the level')"
+            />
+          </div>
+        </div>
+        <div
+          v-else-if="selectedType && slaPolicy.data && !slaPolicy.data.applies"
+          class="text-p-sm text-ink-gray-5 rounded border border-outline-gray-2 p-3"
+        >
+          {{
+            __(
+              "No SLA applies to this category. It is planned within the ordinary development cycle."
+            )
+          }}
+        </div>
+      </div>
       <!-- custom fields -->
       <div
         class="grid grid-cols-1 gap-4 sm:grid-cols-3"
@@ -158,7 +204,14 @@ import {
 } from "frappe-ui";
 import { useOnboarding } from "frappe-ui/frappe";
 import sanitizeHtml from "sanitize-html";
-import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import SearchArticles from "../../components/SearchArticles.vue";
 const TicketTextEditor = defineAsyncComponent(
@@ -217,6 +270,47 @@ const ticketPriorityResource = createListResource({
   cache: "ticketPriorities",
 });
 
+// customer-facing category + SLA policy shown while opening a ticket
+const selectedType = ref("");
+const selectedLevel = ref("");
+
+const ticketOptions = createResource({
+  url: "fab_helpdesk.api.get_ticket_options",
+  auto: isCustomerPortal.value,
+  makeParams: () => ({ customer: templateFields["customer"] || "" }),
+});
+
+const slaPolicy = createResource({
+  url: "fab_helpdesk.api.get_sla_policy",
+});
+
+const categoryOptions = computed(() =>
+  (ticketOptions.data?.types || []).map((t) => ({
+    label: t.label,
+    value: t.value,
+  }))
+);
+
+const levelOptions = computed(() =>
+  (slaPolicy.data?.levels || []).map((l) => ({ label: l.label, value: l.value }))
+);
+
+watch(selectedType, (val) => {
+  templateFields["ticket_type"] = val;
+  selectedLevel.value = "";
+  templateFields["priority"] = "";
+  if (val) {
+    slaPolicy.submit({
+      ticket_type: val,
+      customer: templateFields["customer"] || "",
+    });
+  }
+});
+
+watch(selectedLevel, (val) => {
+  templateFields["priority"] = val;
+});
+
 let oldFields = [];
 
 function applyFilters(fieldname: string, filters: any = null) {
@@ -262,6 +356,12 @@ const ticket = createResource({
     attachments: attachments.value,
   }),
   validate: (params) => {
+    if (isCustomerPortal.value) {
+      if (!selectedType.value) return __("Please select a category");
+      if (slaPolicy.data?.applies && !selectedLevel.value) {
+        return __("Please select a priority level");
+      }
+    }
     const fields = visibleFields.value?.filter((f) => f.required) || [];
     const toVerify = [...fields, "subject", "description"];
     for (const field of toVerify) {
