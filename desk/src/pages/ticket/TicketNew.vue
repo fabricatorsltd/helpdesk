@@ -58,11 +58,7 @@
           v-else-if="selectedType && slaPolicy.data && !slaPolicy.data.applies"
           class="text-p-sm text-ink-gray-5 rounded border border-outline-gray-2 p-3"
         >
-          {{
-            __(
-              "No SLA applies to this category. It is planned within the ordinary development cycle."
-            )
-          }}
+          {{ __("No specific SLA applies to this category.") }}
         </div>
       </div>
       <!-- custom fields -->
