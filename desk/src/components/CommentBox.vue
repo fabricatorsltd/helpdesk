@@ -68,7 +68,7 @@
             variant="solid"
           />
         </div>
-        <Button label="Discard" @click="handleDiscard" />
+        <Button :label="__('Discard')" @click="handleDiscard" />
       </div>
       <div
         class="flex flex-wrap gap-2"
