@@ -1,7 +1,7 @@
 <template>
   <div class="flex w-fit items-center">
     <Button
-      :label="label"
+      :label="__(label)"
       :class="count ? 'rounded-e-none' : ''"
       @click="$emit('toggle')"
     >

@@ -84,9 +84,7 @@ const props = withDefaults(defineProps<Props>(), {
 const descriptionText = computed(() =>
   props.description !== undefined && props.description !== ""
     ? props.description
-    : `Create new ${props.title
-        .split(" ")[1]
-        .toLocaleLowerCase()} using the Create button.`
+    : "Create a new one using the Create button."
 );
 </script>
 
