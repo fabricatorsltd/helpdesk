@@ -323,7 +323,9 @@ const customOnChange = computed(() => template.data?._customOnChange);
 
 const visibleFields = computed(() => {
   let _fields = template.data?.fields?.filter(
-    (f) => !isCustomerPortal.value || !f.hide_from_customer
+    // on the portal, drop fields the customer cannot write (permlevel > 0): they
+    // stay visible read-only on the ticket view, but are not offered at creation
+    (f) => !isCustomerPortal.value || (!f.hide_from_customer && !f.permlevel)
   );
   if (!_fields) return [];
   return _fields.map((field) => parseField(field, templateFields));
