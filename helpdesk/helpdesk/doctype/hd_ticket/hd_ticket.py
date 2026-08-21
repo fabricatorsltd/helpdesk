@@ -648,7 +648,9 @@ class HDTicket(Document):
             )
         skip_email_workflow = self.skip_email_workflow()
         medium = "" if skip_email_workflow else "Email"
-        subject = f"Re: {self.subject}"
+        # keep the ticket id in the subject as a stable tracking tag so replies
+        # stay tied to the ticket even if a client's mailer drops In-Reply-To
+        subject = f"Re: {self.subject} [#{self.name}]"
         from_email_id = from_email.get("email_id") if from_email else None
         email_account_name = from_email.get("email_account") if from_email else None
         sender = from_email_id or frappe.session.user
