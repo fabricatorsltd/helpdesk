@@ -129,13 +129,9 @@ def get_default_email_content(type: str) -> str:
 
     if type == "reply_via_agent":
         return """\
-##- {{ _("Reply above this line") }} -##
-
+<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- {{ _("Reply above this line") }} -##</p>
 {{ message }}
-
----
-
-**{{ _("Request no.") }} {{ ticket_url.split('/')[-1] }}** - [{{ _("Open the ticket") }}]({{ ticket_url }})
+<p style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e9ee;color:#8d95a0;font-size:13px;">{{ _("Request no.") }} {{ ticket_url.split('/')[-1] }} - <a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
 """
 
 
