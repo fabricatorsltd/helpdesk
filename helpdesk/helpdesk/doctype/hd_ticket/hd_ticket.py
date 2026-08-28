@@ -856,7 +856,7 @@ class HDTicket(Document):
                     email_content,
                     default_email_content,
                     {
-                        "ticket_url": get_helpdesk_url(
+                        "ticket_url": frappe.utils.get_url(
                             "/helpdesk/tickets/" + str(self.name)
                         ),
                         "message": message,
@@ -950,7 +950,7 @@ class HDTicket(Document):
                             )
                             if self.resolution_by
                             else None,
-                            "ticket_url": get_helpdesk_url(
+                            "ticket_url": frappe.utils.get_url(
                                 "/helpdesk/tickets/" + str(self.name)
                             ),
                         },
