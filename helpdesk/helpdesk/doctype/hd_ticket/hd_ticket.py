@@ -720,21 +720,19 @@ class HDTicket(Document):
         message = self.parse_content(message)
 
         reply_to_email = sender_email.email_id
-        rendered_template: str | None = None
-        if self.via_customer_portal:
-            email_content = frappe.db.get_single_value(
-                "HD Settings", "reply_via_agent_email_content"
-            )
-            default_email_content = get_default_email_content("reply_via_agent")
-            try:
-                with use_language(resolve_ticket_language(self)):
-                    rendered_template = self._get_rendered_template(
-                        email_content,
-                        default_email_content,
-                        {"message": message, "ticket_url": self.portal_uri},
-                    )
-            except Exception as e:
-                frappe.throw(_("Could not an email due to: {0}").format(e))
+        email_content = frappe.db.get_single_value(
+            "HD Settings", "reply_via_agent_email_content"
+        )
+        default_email_content = get_default_email_content("reply_via_agent")
+        try:
+            with use_language(resolve_ticket_language(self)):
+                rendered_template = self._get_rendered_template(
+                    email_content,
+                    default_email_content,
+                    {"message": message, "ticket_url": self.portal_uri},
+                )
+        except Exception as e:
+            frappe.throw(_("Could not send an email due to: {0}").format(e))
 
         send_delayed = True
         send_now = False
