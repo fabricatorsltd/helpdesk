@@ -80,6 +80,23 @@ def get_default_email_content(type: str) -> str:
 <p style="color:#8d95a0;">{{ _("If you did not submit this request, you can safely ignore this message.") }}</p>
 """
 
+    if type == "new_ticket_to_agents":
+        return """\
+<p>{{ _("A new support request has arrived by email.") }}</p>
+<table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
+  <tr><td style="color:#8d95a0;">{{ _("Request") }}</td><td><strong>#{{ doc.name }}</strong> - {{ doc.subject }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("From") }}</td><td>{{ raised_by }}{% if contact_name %} ({{ contact_name }}){% endif %}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Customer") }}</td><td>{{ customer or _("Not associated") }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Contract") }}</td><td>{{ contract or "-" }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("SLA") }}</td><td>{{ doc.sla }} - {{ _("Priority") }} {{ doc.priority }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Response due") }}</td><td>{{ response_by or "-" }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Resolution due") }}</td><td>{{ resolution_by or "-" }}</td></tr>
+</table>
+<p style="margin-top:14px;color:#8d95a0;">{{ _("Message") }}</p>
+<div style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">{{ message }}</div>
+<p style="margin-top:14px;"><a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
+"""
+
     if type == "reply_to_agents":
         return """\
 <div>
