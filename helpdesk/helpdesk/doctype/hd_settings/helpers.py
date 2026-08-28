@@ -1,9 +1,63 @@
+from contextlib import contextmanager
+from email.utils import parseaddr
+
 import frappe
 from frappe.utils import get_datetime
 
 
 def is_email_content_empty(content: str | None) -> bool:
     return content is None or content.strip() == ""
+
+
+def get_default_language() -> str:
+    return frappe.conf.get("helpdesk_default_language") or "it"
+
+
+def resolve_ticket_language(doc) -> str:
+    """Pick the email language for a ticket from its sender.
+
+    - existing user account for the sender email -> that user's language
+    - else sender linked to a customer -> the customer's default language
+    - else -> the helpdesk default language
+    """
+    from helpdesk.utils import get_customers
+
+    email_id = parseaddr(doc.get("raised_by") or "")[1].lower()
+
+    if email_id:
+        user_lang = frappe.db.get_value("User", email_id, "language")
+        if user_lang:
+            return user_lang
+
+    customer = doc.get("customer")
+    if not customer and doc.get("contact"):
+        customers = get_customers(contact=doc.get("contact"))
+        customer = customers[0] if customers else None
+
+    if customer:
+        lang = frappe.db.get_value("HD Customer", customer, "default_language")
+        if not lang:
+            erpnext_customer = frappe.db.get_value(
+                "HD Customer", customer, "erpnext_customer"
+            )
+            if erpnext_customer:
+                lang = frappe.db.get_value("Customer", erpnext_customer, "language")
+        if lang:
+            return lang
+
+    return get_default_language()
+
+
+@contextmanager
+def use_language(lang: str | None):
+    """Temporarily switch the translation language for outbound content."""
+    previous = getattr(frappe.local, "lang", None)
+    if lang:
+        frappe.local.lang = lang
+    try:
+        yield
+    finally:
+        frappe.local.lang = previous
 
 
 def get_default_email_content(type: str) -> str:
@@ -17,16 +71,13 @@ def get_default_email_content(type: str) -> str:
 
     if type == "acknowledgement":
         return """\
-<p>Hi,</p>
-<br />
-<p>Thank you for reaching out to us. We've received your request and created a support ticket.</p>
-<p>
-    <strong>Ticket ID:</strong> {{ doc.name }}<br />
-    <strong>Subject:</strong> {{ doc.subject }}<br />
+<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- Rispondi sopra questa riga | Reply above this line -##</p>
+<p>{{ _("Thank you for contacting us. We have received your request and opened a support ticket. Our team will get back to you shortly.") }}</p>
+<p style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">
+  <strong>{{ _("Request no.") }} {{ doc.name }}</strong>
 </p>
-<p>Our team is reviewing it and will get back to you shortly.</p>
-<br />
-<p>Best,<br />Support Team</p>
+<p>{{ _("You can add a comment to your request by replying to this email. To view or update it,") }} <a href="{{ ticket_url }}">{{ _("click here") }}</a>.</p>
+<p style="color:#8d95a0;">{{ _("If you did not submit this request, you can safely ignore this message.") }}</p>
 """
 
     if type == "reply_to_agents":

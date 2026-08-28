@@ -13,6 +13,7 @@
   "domain",
   "erpnext_customer",
   "country",
+  "default_language",
   "column_break_fead",
   "primary_contact",
   "email_id",
@@ -108,6 +109,13 @@
    "fieldtype": "Link",
    "label": "Country",
    "options": "Country"
+  },
+  {
+   "description": "Language used for emails sent to this customer. Overrides the linked billing customer's language.",
+   "fieldname": "default_language",
+   "fieldtype": "Link",
+   "label": "Default Language",
+   "options": "Language"
   }
  ],
  "image_field": "image",
