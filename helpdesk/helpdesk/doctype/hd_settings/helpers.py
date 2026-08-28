@@ -71,7 +71,7 @@ def get_default_email_content(type: str) -> str:
 
     if type == "acknowledgement":
         return """\
-<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- Rispondi sopra questa riga | Reply above this line -##</p>
+<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- {{ _("Reply above this line") }} -##</p>
 <p>{{ _("Thank you for contacting us. We have received your request and opened a support ticket. Our team will get back to you shortly.") }}</p>
 <p style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">
   <strong>{{ _("Request no.") }} {{ doc.name }}</strong>
@@ -129,32 +129,13 @@ def get_default_email_content(type: str) -> str:
 
     if type == "reply_via_agent":
         return """\
-<div>
-  <h2><strong>Ticket #{{ doc.name }}</strong></h2>
-  <h3>You have a new reply on this ticket</h3>
-  <br />
-  <div style="margin-bottom: 10px">
-    <h3 style="margin-bottom: 20px">Message</h3>
-    <div
-      style="
-        background: #f3f5f8;
-        padding: 10px;
-        border-radius: 4px;
-        border: 1px solid #e5e9ee;
-      "
-    >
-      {{ message }}
-    </div>
-  </div>
-  <p>Please visit the customer portal to reply to this message</p>
-  <a
-    class="btn btn-primary"
-    href="{{ ticket_url }}"
-    rel="noopener noreferrer"
-    target="_blank"
-  >View in Portal</a>
-  <br />
-</div>
+##- {{ _("Reply above this line") }} -##
+
+{{ message }}
+
+---
+
+**{{ _("Request no.") }} {{ ticket_url.split('/')[-1] }}** - [{{ _("Open the ticket") }}]({{ ticket_url }})
 """
 
 
