@@ -21,6 +21,8 @@ from pypika.terms import Criterion
 from helpdesk.helpdesk.doctype.hd_settings.helpers import (
     get_default_email_content,
     is_email_content_empty,
+    resolve_ticket_language,
+    use_language,
 )
 from helpdesk.helpdesk.doctype.hd_ticket_activity.hd_ticket_activity import (
     log_ticket_activity,
@@ -150,20 +152,21 @@ class HDTicket(Document):
         )
         default_feedback_email_content = get_default_email_content("share_feedback")
         try:
-            frappe.sendmail(
-                recipients=[self.raised_by],
-                subject=f"Re: {self.subject}",
-                message=self._get_rendered_template(
-                    feedback_email_content,
-                    default_feedback_email_content,
-                    {"url": url},
-                ),
-                reference_doctype="HD Ticket",
-                reference_name=self.name,
-                now=True,
-                in_reply_to=last_communication.name if last_communication else None,
-                email_headers={"X-Auto-Generated": "hd-email-feedback"},
-            )
+            with use_language(resolve_ticket_language(self)):
+                frappe.sendmail(
+                    recipients=[self.raised_by],
+                    subject=f"Re: {self.subject}",
+                    message=self._get_rendered_template(
+                        feedback_email_content,
+                        default_feedback_email_content,
+                        {"url": url},
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    in_reply_to=last_communication.name if last_communication else None,
+                    email_headers={"X-Auto-Generated": "hd-email-feedback"},
+                )
             frappe.msgprint(_("Feedback email has been sent to the customer"))
         except Exception as e:
             frappe.throw(_("Could not send feedback email,due to: {0}").format(e))
@@ -720,11 +723,12 @@ class HDTicket(Document):
             )
             default_email_content = get_default_email_content("reply_via_agent")
             try:
-                rendered_template = self._get_rendered_template(
-                    email_content,
-                    default_email_content,
-                    {"message": message, "ticket_url": self.portal_uri},
-                )
+                with use_language(resolve_ticket_language(self)):
+                    rendered_template = self._get_rendered_template(
+                        email_content,
+                        default_email_content,
+                        {"message": message, "ticket_url": self.portal_uri},
+                    )
             except Exception as e:
                 frappe.throw(_("Could not an email due to: {0}").format(e))
 
@@ -870,19 +874,21 @@ class HDTicket(Document):
         )
 
         try:
-            frappe.sendmail(
-                recipients=[self.raised_by],
-                subject=_("Ticket #{0}: We've received your request").format(self.name),
-                message=self._get_rendered_template(
-                    acknowledgement_email_content,
-                    default_acknowledgement_email_content,
-                ),
-                reference_doctype="HD Ticket",
-                reference_name=self.name,
-                now=True,
-                expose_recipients="header",
-                email_headers={"X-Auto-Generated": "hd-acknowledgement"},
-            )
+            with use_language(resolve_ticket_language(self)):
+                frappe.sendmail(
+                    recipients=[self.raised_by],
+                    subject=_("[Request received] {0}").format(self.subject),
+                    message=self._get_rendered_template(
+                        acknowledgement_email_content,
+                        default_acknowledgement_email_content,
+                        {"ticket_url": self.portal_uri},
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    expose_recipients="header",
+                    email_headers={"X-Auto-Generated": "hd-acknowledgement"},
+                )
         except Exception as e:
             frappe.throw(
                 _("Could not send an acknowledgement email due to: {0}").format(e)
