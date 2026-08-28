@@ -20,6 +20,7 @@ from pypika.terms import Criterion
 
 from helpdesk.helpdesk.doctype.hd_settings.helpers import (
     get_default_email_content,
+    get_default_language,
     is_email_content_empty,
     resolve_ticket_language,
     use_language,
@@ -190,6 +191,9 @@ class HDTicket(Document):
             and send_ack_email
         ):
             self.send_acknowledgement_email()
+
+        if not self.via_customer_portal and not frappe.flags.initial_sync:
+            self.notify_agents_new_ticket()
 
     def capture_ticket_created_telemetry_events(self):
         if self.subject == "Welcome to Helpdesk":
@@ -893,6 +897,71 @@ class HDTicket(Document):
             frappe.throw(
                 _("Could not send an acknowledgement email due to: {0}").format(e)
             )
+
+    def notify_agents_new_ticket(self):
+        recipients = [
+            a
+            for a in frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
+            if a and "@" in a
+        ]
+        if not recipients:
+            return
+
+        contact_name = None
+        if self.contact:
+            names = frappe.db.get_value(
+                "Contact", self.contact, ["first_name", "last_name"]
+            )
+            if names:
+                contact_name = " ".join(p for p in names if p) or None
+
+        contract = None
+        if self.customer:
+            erpnext_customer = frappe.db.get_value(
+                "HD Customer", self.customer, "erpnext_customer"
+            )
+            if erpnext_customer:
+                contract = frappe.db.get_value(
+                    "Contract",
+                    {"party_type": "Customer", "party_name": erpnext_customer},
+                    "name",
+                )
+
+        default_content = get_default_email_content("new_ticket_to_agents")
+        try:
+            with use_language(get_default_language()):
+                frappe.sendmail(
+                    recipients=recipients,
+                    subject=_("[New request] #{0}: {1}").format(self.name, self.subject),
+                    message=self._get_rendered_template(
+                        None,
+                        default_content,
+                        {
+                            "raised_by": self.raised_by,
+                            "contact_name": contact_name,
+                            "customer": self.customer,
+                            "contract": contract,
+                            "message": self.description,
+                            "response_by": frappe.utils.format_datetime(self.response_by)
+                            if self.response_by
+                            else None,
+                            "resolution_by": frappe.utils.format_datetime(
+                                self.resolution_by
+                            )
+                            if self.resolution_by
+                            else None,
+                            "ticket_url": get_helpdesk_url(
+                                "/helpdesk/tickets/" + str(self.name)
+                            ),
+                        },
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    email_headers={"X-Auto-Generated": "hd-new-ticket-agents"},
+                )
+        except Exception:
+            self.log_error("Could not notify agents of the new ticket")
 
     @frappe.whitelist()
     def mark_seen(self):
