@@ -35,6 +35,8 @@
 
         <!-- Assignee component -->
         <AssignTo />
+        <!-- CC participants (email loop + visibility grant) -->
+        <TicketCCs />
       </div>
     </div>
 
@@ -159,6 +161,7 @@ import LucideChevronRight from "~icons/lucide/chevron-right";
 import Section from "../Section.vue";
 import TicketField from "../TicketField.vue";
 import AssignTo from "./AssignTo.vue";
+import TicketCCs from "./TicketCCs.vue";
 import TicketContact from "./TicketContact.vue";
 
 const ticket = inject(TicketSymbol)!;
