@@ -2,6 +2,11 @@ import frappe
 from frappe import _
 from frappe.core.doctype.user_invitation.user_invitation import UserInvitation
 
+from helpdesk.helpdesk.doctype.hd_settings.helpers import (
+    get_default_language,
+    use_language,
+)
+
 
 class HelpdeskUserInvitation(UserInvitation):
     def _get_email_title(self):
@@ -16,3 +21,34 @@ class HelpdeskUserInvitation(UserInvitation):
         if not brand:
             return super()._get_email_title()
         return _("{0} on {1}").format(brand, super()._get_email_title())
+
+    def _after_insert(self):
+        # Mirror the framework invitation send, but for helpdesk invites route
+        # the accept link to the customer portal host (the desk host_name would
+        # land the customer on a domain where their SSO button is hidden) and
+        # render the email in the helpdesk default language.
+        if self.app_name != "helpdesk":
+            return super()._after_insert()
+        key = frappe.generate_hash()
+        self.db_set("key", frappe.utils.sha256_hash(key))
+        invite_link = self._helpdesk_invite_link(key)
+        with use_language(get_default_language()):
+            email_title = self._get_email_title()
+            frappe.sendmail(
+                recipients=self.email,
+                subject=_("You've been invited to join {0}").format(email_title),
+                template="user_invitation",
+                args={"title": email_title, "invite_link": invite_link},
+                now=True,
+            )
+        self.db_set("email_sent_at", frappe.utils.now())
+        return key
+
+    def _helpdesk_invite_link(self, key: str) -> str:
+        path = f"/api/method/frappe.core.api.user_invitation.accept_invitation?key={key}"
+        host = (frappe.conf.get("helpdesk_host") or "").strip()
+        if not host:
+            return frappe.utils.get_url(path)
+        if not host.startswith(("http://", "https://")):
+            host = "https://" + host
+        return host.rstrip("/") + path
