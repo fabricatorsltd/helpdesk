@@ -17,29 +17,24 @@
         </button>
       </span>
     </div>
-    <div class="flex items-center gap-2">
-      <input
-        v-model="newEmail"
-        type="email"
-        :placeholder="__('Add email...')"
-        class="flex-1 min-w-0 rounded border border-outline-gray-2 bg-surface-white px-2 py-1 text-p-sm text-ink-gray-8 focus:outline-none"
-        @keyup.enter="add"
-      />
-      <Button :label="__('Add')" size="sm" :disabled="!isValid || loading" @click="add" />
-    </div>
+    <Autocomplete
+      :placeholder="__('Add a contact...')"
+      :options="candidates.data || []"
+      :value="null"
+      @change="onSelect"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { Autocomplete } from "@/components";
 import { __ } from "@/translation";
 import { TicketSymbol } from "@/types";
-import { Button, call } from "frappe-ui";
-import { computed, inject, ref } from "vue";
+import { call, createResource } from "frappe-ui";
+import { computed, inject } from "vue";
 import LucideX from "~icons/lucide/x";
 
 const ticket = inject(TicketSymbol)!;
-const newEmail = ref("");
-const loading = ref(false);
 
 const ccs = computed(() =>
   (ticket.value?.doc?.fab_cc || "")
@@ -48,23 +43,26 @@ const ccs = computed(() =>
     .filter(Boolean)
 );
 
-const isValid = computed(() => /.+@.+\..+/.test(newEmail.value.trim()));
+const candidates = createResource({
+  url: "fab_helpdesk.api.get_cc_candidates",
+  makeParams: () => ({ ticket: ticket.value.name }),
+  auto: true,
+});
 
 function run(method: string, email: string) {
-  loading.value = true;
   return call("run_doc_method", {
     dt: "HD Ticket",
     dn: ticket.value.name,
     method,
     args: { email },
-  })
-    .then(() => ticket.value.reload())
-    .finally(() => (loading.value = false));
+  }).then(() => {
+    ticket.value.reload();
+    candidates.reload();
+  });
 }
 
-function add() {
-  if (!isValid.value) return;
-  run("add_cc", newEmail.value.trim().toLowerCase()).then(() => (newEmail.value = ""));
+function onSelect(option: { value?: string } | null) {
+  if (option?.value) run("add_cc", option.value);
 }
 
 function remove(email: string) {
