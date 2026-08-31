@@ -651,6 +651,35 @@ class HDTicket(Document):
                     out.append(addr)
         return ", ".join(out) or None
 
+    def _cc_list(self):
+        return [addr.lower() for _, addr in getaddresses([self.get("fab_cc") or ""]) if addr]
+
+    @frappe.whitelist()
+    def add_cc(self, email):
+        if not is_agent():
+            frappe.throw(
+                _("You are not permitted to manage CC"), frappe.PermissionError
+            )
+        addr = (parseaddr(email or "")[1] or "").strip().lower()
+        if not addr or "@" not in addr:
+            frappe.throw(_("Invalid email address"))
+        current = self._cc_list()
+        if addr not in current:
+            current.append(addr)
+            self.db_set("fab_cc", ", ".join(current), update_modified=False)
+        return self.get("fab_cc")
+
+    @frappe.whitelist()
+    def remove_cc(self, email):
+        if not is_agent():
+            frappe.throw(
+                _("You are not permitted to manage CC"), frappe.PermissionError
+            )
+        addr = (parseaddr(email or "")[1] or "").strip().lower()
+        current = [a for a in self._cc_list() if a != addr]
+        self.db_set("fab_cc", ", ".join(current), update_modified=False)
+        return self.get("fab_cc")
+
     @frappe.whitelist()
     def reply_via_agent(
         self,
@@ -1356,9 +1385,25 @@ def has_permission(doc, user=None):
         return True
     if _is_customer_manager(doc.customer, user):
         return True
+    if _user_in_cc(doc, user):
+        return True
     if not is_agent(user):
         return False
     return _agent_has_permission(doc, user)
+
+
+def _user_in_cc(doc, user: str) -> bool:
+    """A user CC'd on the ticket may view it, even if it is not their own.
+
+    CC is both an email loop and a visibility grant, matched on the user's email
+    against the stored participant list."""
+    cc = doc.get("fab_cc")
+    if not cc:
+        return False
+    email = (frappe.db.get_value("User", user, "email") or user or "").lower()
+    if not email:
+        return False
+    return email in {addr.lower() for _, addr in getaddresses([cc]) if addr}
 
 
 def _is_customer_manager(customer: str, user: str) -> bool:

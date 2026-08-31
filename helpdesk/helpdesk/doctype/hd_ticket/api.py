@@ -162,6 +162,10 @@ def get_customer_criteria():
     customer = get_customers(user)
     for c in customer:
         conditions.append(QBTicket.customer == c)
+    # CC is a visibility grant: a user CC'd on a ticket sees it in their list
+    email = frappe.db.get_value("User", user, "email") or user
+    if email:
+        conditions.append(QBTicket.fab_cc.like(f"%{email}%"))
     return Criterion.any(conditions)
 
 
