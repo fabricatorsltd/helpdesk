@@ -1,6 +1,7 @@
 import json
 import uuid
-from email.utils import parseaddr
+from datetime import timedelta
+from email.utils import getaddresses, parseaddr
 
 import frappe
 from bs4 import BeautifulSoup, Comment
@@ -30,6 +31,7 @@ from helpdesk.helpdesk.doctype.hd_ticket_activity.hd_ticket_activity import (
 from helpdesk.helpdesk.utils.email import (
     default_outgoing_email_account,
     default_ticket_outgoing_email_account,
+    helpdesk_outgoing_email_account,
 )
 from helpdesk.utils import (
     capture_event,
@@ -124,6 +126,7 @@ class HDTicket(Document):
         if (
             self.is_new()
             or self.via_customer_portal
+            or self.is_merged
             or self.feedback_rating
             or not self.has_value_changed("status")
             or not self.key
@@ -156,7 +159,7 @@ class HDTicket(Document):
             with use_language(resolve_ticket_language(self)):
                 frappe.sendmail(
                     recipients=[self.raised_by],
-                    subject=f"Re: {self.subject}",
+                    subject=_("[Feedback] #{0}: {1}").format(self.name, self.subject),
                     message=self._get_rendered_template(
                         feedback_email_content,
                         default_feedback_email_content,
@@ -186,14 +189,17 @@ class HDTicket(Document):
         send_ack_email = frappe.db.get_single_value(
             "HD Settings", "send_acknowledgement_email"
         )
-        if (
-            not self.via_customer_portal
-            and not frappe.flags.initial_sync
-            and send_ack_email
-        ):
+        # Acknowledge every new ticket to the requester, portal-created included,
+        # so they always get the ticket number and reply-by-email link.
+        if not frappe.flags.initial_sync and send_ack_email:
             self.send_acknowledgement_email()
 
-        if not self.via_customer_portal and not frappe.flags.initial_sync:
+        # Notify agents of every new ticket, including portal-created ones. Upstream
+        # only notified on email tickets, so tickets opened from the customer portal
+        # went unseen until someone happened to look at the queue. Email tickets are
+        # inserted with subject and sender only, the body lands later with the
+        # communication, so those are announced from on_communication_update instead.
+        if not frappe.flags.initial_sync and self.get("description"):
             self.notify_agents_new_ticket()
 
     def capture_ticket_created_telemetry_events(self):
@@ -431,7 +437,9 @@ class HDTicket(Document):
         old_doc = self.get_doc_before_save()
         if not old_doc or is_agent() or not self.via_customer_portal:
             return
-        is_closed = old_doc.status == "Closed"
+        # merged tickets used to land in Closed and were locked by that; they now
+        # carry their own status, so the lock reads the merge flag instead
+        is_closed = old_doc.status == "Closed" or bool(old_doc.is_merged)
         is_rated = bool(old_doc.feedback)
         if is_closed or is_rated:
             text = _("Closed or rated tickets cannot be updated by non-agents")
@@ -585,15 +593,18 @@ class HDTicket(Document):
         return bool(int(skip))
 
     def _resolve_sender_email(self, email_account_name, from_email_id):
-        if not email_account_name:
-            sender_email = self.sender_email()
-            return sender_email, (sender_email.name if sender_email else None)
+        """The support mailbox, always.
 
-        if not frappe.db.exists("Email Account", email_account_name):
-            frappe.throw(_("No Email Account found for {0}").format(from_email_id))
+        The account the composer asks for is ignored on purpose. A ticket reply
+        speaks for the helpdesk, so it cannot leave from an agent's personal
+        Email Account (billing, jobs, anything else that happens to sit on their
+        User record), which is what the caller would otherwise be free to pick.
+        """
+        sender_email = helpdesk_outgoing_email_account()
+        if not sender_email:
+            frappe.throw(_("No outgoing Email Account is configured for the helpdesk"))
 
-        sender_email = frappe._dict(name=email_account_name, email_id=from_email_id)
-        return sender_email, email_account_name
+        return sender_email, sender_email.name
 
     def instantly_send_email(self):
         check: str = (
@@ -686,6 +697,62 @@ class HDTicket(Document):
                 "HD Ticket Comment", c.name, attachment.get("file_url")
             )
 
+    def _merge_reply_cc(self, cc, recipients):
+        """Union of the ticket's stored CC participants and any CC the agent
+        typed, minus the primary recipients. Returns a comma-joined string or None."""
+        to_addrs = {addr.lower() for _, addr in getaddresses([recipients or ""]) if addr}
+        out = []
+        for raw in (self.get("fab_cc"), cc):
+            for _, addr in getaddresses([raw or ""]):
+                addr = addr.lower()
+                if addr and "@" in addr and addr not in to_addrs and addr not in out:
+                    out.append(addr)
+        return ", ".join(out) or None
+
+    def _cc_list(self):
+        return [addr.lower() for _, addr in getaddresses([self.get("fab_cc") or ""]) if addr]
+
+    def _own_mailboxes(self):
+        """Lowercased addresses of our own Email Accounts. Replies must never go
+        to one of these: the message would loop back into the inbox."""
+        return {a.lower() for a in frappe.get_all("Email Account", pluck="email_id") if a}
+
+    def _strip_own_mailboxes(self, raw):
+        """Parse an address string and drop any of our own mailboxes, keeping the
+        original (display-name) form of the rest."""
+        own = self._own_mailboxes()
+        return [
+            (f"{name} <{addr}>" if name else addr)
+            for name, addr in getaddresses([raw or ""])
+            if addr and "@" in addr and addr.lower() not in own
+        ]
+
+    @frappe.whitelist()
+    def add_cc(self, email):
+        if not is_agent():
+            frappe.throw(
+                _("You are not permitted to manage CC"), frappe.PermissionError
+            )
+        addr = (parseaddr(email or "")[1] or "").strip().lower()
+        if not addr or "@" not in addr:
+            frappe.throw(_("Invalid email address"))
+        current = self._cc_list()
+        if addr not in current:
+            current.append(addr)
+            self.db_set("fab_cc", ", ".join(current), update_modified=False)
+        return self.get("fab_cc")
+
+    @frappe.whitelist()
+    def remove_cc(self, email):
+        if not is_agent():
+            frappe.throw(
+                _("You are not permitted to manage CC"), frappe.PermissionError
+            )
+        addr = (parseaddr(email or "")[1] or "").strip().lower()
+        current = [a for a in self._cc_list() if a != addr]
+        self.db_set("fab_cc", ", ".join(current), update_modified=False)
+        return self.get("fab_cc")
+
     @frappe.whitelist()
     def reply_via_agent(
         self,
@@ -700,11 +767,22 @@ class HDTicket(Document):
             frappe.throw(
                 _("You are not permitted to reply as an agent"), frappe.PermissionError
             )
+        # A merged ticket is a dead thread: the conversation continues on the
+        # target, and its requester was told so. The merge notice is the only
+        # reply that still leaves from here (see merge_ticket).
+        if self.is_merged and self.merged_with and not self.flags.replying_about_merge:
+            frappe.throw(
+                _("This ticket was merged into #{0}, reply from there.").format(
+                    self.merged_with
+                )
+            )
         skip_email_workflow = self.skip_email_workflow()
         medium = "" if skip_email_workflow else "Email"
         # keep the ticket id in the subject as a stable tracking tag so replies
-        # stay tied to the ticket even if a client's mailer drops In-Reply-To
-        subject = f"Re: {self.subject} [#{self.name}]"
+        # stay tied to the ticket even if a client's mailer drops In-Reply-To.
+        # Round brackets so the framework's get_reference_name_from_subject
+        # (subject.rsplit("#")[-1].strip(" ()")) parses the id on the fallback.
+        subject = f"Re: {self.subject} (#{self.name})"
         from_email_id = from_email.get("email_id") if from_email else None
         email_account_name = from_email.get("email_account") if from_email else None
         sender = from_email_id or frappe.session.user
@@ -715,9 +793,26 @@ class HDTicket(Document):
             sender_email, email_account_name = self._resolve_sender_email(
                 email_account_name, from_email_id
             )
+            # the address on the thread has to match the mailbox it actually left
+            # from, or the customer replies to a mailbox that never sent it
+            sender = sender_email.email_id or sender
 
         if recipients == "Administrator":
             recipients = frappe.get_value("User", "Administrator", "email")
+
+        # Never send the reply to one of our own mailboxes. Replying from the
+        # thread to an email whose sender is the support address (an ack or a
+        # previous agent reply) would otherwise target the inbox itself, loop
+        # the message back in and spawn a duplicate ticket. Drop our addresses
+        # and fall back to the requester when nothing valid is left.
+        to_list = self._strip_own_mailboxes(recipients)
+        if not to_list:
+            to_list = self._strip_own_mailboxes(self.raised_by)
+        recipients = ", ".join(to_list)
+
+        # loop in the ticket's CC participants (captured from inbound mail),
+        # merged with anything the agent typed, minus the primary recipients
+        cc = self._merge_reply_cc(cc, recipients)
 
         communication = frappe.get_doc(
             {
@@ -828,14 +923,14 @@ class HDTicket(Document):
     def create_communication_via_contact(
         self, message: str, attachments: list[dict] = [], new_ticket: bool = False
     ):
-        if not new_ticket and frappe.db.get_single_value(
-            "HD Settings", "enable_reply_email_to_agent"
-        ):
-            # send email to assigned agents
-            self.send_reply_email_to_agent(message)
+        # Agents are notified centrally from on_communication_update when the
+        # Received communication below is inserted, so portal and email replies
+        # take the same path (see notify_agents_new_reply).
 
         # if self.status_category == "Paused" and not new_ticket:
-        if not new_ticket:
+        # A merged ticket keeps its status: the reply is redirected to the merge
+        # target from on_communication_update.
+        if not new_ticket and not self.is_merged:
             self.status = self.ticket_reopen_status
             self.save(ignore_permissions=True)
 
@@ -892,39 +987,88 @@ class HDTicket(Document):
                 doc.attached_to_name = self.name
                 doc.save()
 
-    def send_reply_email_to_agent(
-        self, message: str = "Please check the latest update on the portal."
-    ):
-        assigned_agents = self.get_assigned_agents()
-        if not assigned_agents:
+    def _internal_reply_addresses(self):
+        """Our own mailboxes and active agents. A reply from any of these is not
+        a customer reply and must not trigger the agent notification."""
+        addrs = {a.lower() for a in frappe.get_all("Email Account", pluck="email_id") if a}
+        addrs |= {
+            a.lower() for a in frappe.get_all("HD Agent", pluck="name") if a and "@" in a
+        }
+        return addrs
+
+    def notify_agents_new_reply(self, c):
+        """Email agents when someone who is not an agent replies to the ticket.
+
+        Called from on_communication_update, so it covers every reply channel:
+        inbound email and portal both create a Communication and land here. The
+        opening message is left to notify_agents_new_ticket; agent replies and
+        our own auto-mail are filtered out by sender. Guarded to fire once, on
+        the communication's insert, so later edits don't re-notify."""
+        if not getattr(c.flags, "in_insert", False):
+            return
+        if not frappe.db.get_single_value("HD Settings", "enable_reply_email_to_agent"):
+            return
+        if (c.communication_type or "") != "Communication":
+            return
+        sender = (c.sender or "").lower()
+        if not sender or sender in self._internal_reply_addresses():
+            return
+        # The opener is announced by notify_agents_new_ticket; notify only replies.
+        if (
+            frappe.db.count(
+                "Communication",
+                {"reference_doctype": "HD Ticket", "reference_name": self.name},
+            )
+            <= 1
+        ):
             return
 
-        recipients = [a.get("name") for a in self.get_assigned_agents()]
+        active_agents = frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
+        assigned = {a.get("name") for a in (self.get_assigned_agents() or [])}
+        # Assigned agents handle the ticket; fall back to the whole active team so
+        # a reply on an unassigned ticket never goes unseen.
+        recipients = [a for a in active_agents if a in assigned] or active_agents
+        recipients = [r for r in recipients if r and "@" in r and r.lower() != sender]
+        if not recipients:
+            return
+
+        contact_name = None
+        if self.contact:
+            names = frappe.db.get_value(
+                "Contact", self.contact, ["first_name", "last_name"]
+            )
+            if names:
+                contact_name = " ".join(p for p in names if p) or None
 
         email_content = frappe.db.get_single_value(
             "HD Settings", "reply_email_to_agent_content"
         )
-        default_email_content = get_default_email_content("reply_to_agents")
+        default_content = get_default_email_content("reply_to_agents")
         try:
-            frappe.sendmail(
-                recipients=recipients,
-                subject=f"Re: {self.subject} - #{self.name}",
-                message=self._get_rendered_template(
-                    email_content,
-                    default_email_content,
-                    {
-                        "ticket_url": frappe.utils.get_url(
-                            "/helpdesk/tickets/" + str(self.name)
-                        ),
-                        "message": message,
-                    },
-                ),
-                reference_doctype="HD Ticket",
-                reference_name=self.name,
-                now=True,
-            )
-        except Exception as e:
-            frappe.throw(_(e))
+            with use_language(get_default_language()):
+                frappe.sendmail(
+                    recipients=recipients,
+                    subject=_("[New reply] #{0}: {1}").format(self.name, self.subject),
+                    message=self._get_rendered_template(
+                        email_content,
+                        default_content,
+                        {
+                            "raised_by": self.raised_by,
+                            "contact_name": contact_name,
+                            "customer": self.customer,
+                            "message": c.content,
+                            "ticket_url": frappe.utils.get_url(
+                                "/helpdesk/tickets/" + str(self.name)
+                            ),
+                        },
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    email_headers={"X-Auto-Generated": "hd-new-reply-agents"},
+                )
+        except Exception:
+            self.log_error("Could not notify agents of the new reply")
 
     def send_acknowledgement_email(self):
         acknowledgement_email_content = frappe.db.get_single_value(
@@ -955,15 +1099,8 @@ class HDTicket(Document):
                 _("Could not send an acknowledgement email due to: {0}").format(e)
             )
 
-    def notify_agents_new_ticket(self):
-        recipients = [
-            a
-            for a in frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
-            if a and "@" in a
-        ]
-        if not recipients:
-            return
-
+    def _agent_email_context(self):
+        """Template args shared by the agent-facing ticket emails."""
         contact_name = None
         if self.contact:
             names = frappe.db.get_value(
@@ -984,6 +1121,31 @@ class HDTicket(Document):
                     "name",
                 )
 
+        return {
+            "raised_by": self.raised_by,
+            "contact_name": contact_name,
+            "customer": self.customer,
+            "contract": contract,
+            "message": self.description,
+            "response_by": frappe.utils.format_datetime(self.response_by)
+            if self.response_by
+            else None,
+            "resolution_by": frappe.utils.format_datetime(self.resolution_by)
+            if self.resolution_by
+            else None,
+            # Agent-facing link, so the ERP host and not the customer portal.
+            "ticket_url": frappe.utils.get_url("/helpdesk/tickets/" + str(self.name)),
+        }
+
+    def notify_agents_new_ticket(self):
+        recipients = [
+            a
+            for a in frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
+            if a and "@" in a
+        ]
+        if not recipients:
+            return
+
         default_content = get_default_email_content("new_ticket_to_agents")
         try:
             with use_language(get_default_language()):
@@ -993,24 +1155,7 @@ class HDTicket(Document):
                     message=self._get_rendered_template(
                         None,
                         default_content,
-                        {
-                            "raised_by": self.raised_by,
-                            "contact_name": contact_name,
-                            "customer": self.customer,
-                            "contract": contract,
-                            "message": self.description,
-                            "response_by": frappe.utils.format_datetime(self.response_by)
-                            if self.response_by
-                            else None,
-                            "resolution_by": frappe.utils.format_datetime(
-                                self.resolution_by
-                            )
-                            if self.resolution_by
-                            else None,
-                            "ticket_url": frappe.utils.get_url(
-                                "/helpdesk/tickets/" + str(self.name)
-                            ),
-                        },
+                        self._agent_email_context(),
                     ),
                     reference_doctype="HD Ticket",
                     reference_name=self.name,
@@ -1019,6 +1164,43 @@ class HDTicket(Document):
                 )
         except Exception:
             self.log_error("Could not notify agents of the new ticket")
+
+    def notify_agent_assignment(self, agent, assigned_by):
+        """Email the agent a ticket got assigned to. The generic Frappe
+        assignment mail is suppressed for agents, this replaces it."""
+        if not agent or "@" not in agent:
+            return
+        if not frappe.db.exists("HD Agent", agent):
+            return
+        user = frappe.db.get_value(
+            "User", agent, ["enabled", "language"], as_dict=True
+        )
+        if not user or not user.enabled:
+            return
+
+        try:
+            context = self._agent_email_context()
+            context["assigned_by"] = (
+                frappe.db.get_value("User", assigned_by, "full_name") or assigned_by
+            )
+            with use_language(user.language or get_default_language()):
+                frappe.sendmail(
+                    recipients=[agent],
+                    subject=_("[Assigned to you] #{0}: {1}").format(
+                        self.name, self.subject
+                    ),
+                    message=self._get_rendered_template(
+                        None,
+                        get_default_email_content("assigned_to_agent"),
+                        context,
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    email_headers={"X-Auto-Generated": "hd-assignment-agent"},
+                )
+        except Exception:
+            self.log_error("Could not notify the agent of the assignment")
 
     @frappe.whitelist()
     def mark_seen(self):
@@ -1081,6 +1263,19 @@ class HDTicket(Document):
         """
         if sla := self.get_sla():
             sla.apply(self)
+
+    def close_silently(self):
+        """Close on the system's own initiative, with no feedback mail.
+
+        ``ignore_validate`` skips before_save, and with it the feedback mail there is
+        nothing to rate for. It also skips ``apply_sla``, which would leave the ticket
+        on hold forever and shown as overdue: the SLA bookkeeping is run by hand.
+        """
+        self.status = "Closed"
+        self.load_doc_before_save()
+        self.apply_sla()
+        self.flags.ignore_validate = True
+        self.save(ignore_permissions=True)
 
     def get_sla(self):
         if not self.sla:
@@ -1157,12 +1352,18 @@ class HDTicket(Document):
         if c.sent_or_received == "Received":
             # check if agent has replied
 
-            if self.has_agent_replied:
-                self.status = self.ticket_reopen_status
-            else:
-                self.status = self.default_open_status
+            # A merged ticket stays merged: if the redirect above found no safe
+            # target the reply is kept here, but it must not resurrect the ticket.
+            if not self.is_merged:
+                if self.has_agent_replied:
+                    self.status = self.ticket_reopen_status
+                else:
+                    self.status = self.default_open_status
             # if received that means customer has replied
             self.last_customer_response = frappe.utils.now_datetime()
+            # Notify agents of the reply, on any channel (email-in and portal
+            # both create a Received communication that reaches this handler).
+            self.notify_agents_new_reply(c)
         # If communication is outgoing, it must be a reply from agent
         if c.sent_or_received == "Sent":
             # Ignore system notifications
@@ -1175,16 +1376,36 @@ class HDTicket(Document):
             self.last_agent_response = frappe.utils.now_datetime()
 
             # TODO: remove this feature once we add automation feature
-            if frappe.db.get_single_value("HD Settings", "auto_update_status"):
+            if not self.is_merged and frappe.db.get_single_value(
+                "HD Settings", "auto_update_status"
+            ):
                 self.status = frappe.db.get_single_value(
                     "HD Settings", "update_status_to"
                 )
 
+        # The inactivity countdown starts at the newest message on the thread,
+        # whoever wrote it. The reminder and closure mails are automated messages
+        # and returned above, so they never clear the mark they set.
+        if self.meta.has_field("fab_inactivity_reminder_on"):
+            self.fab_inactivity_reminder_on = None
+
         # Fetch description from communication if not set already. This might not be needed
         # anymore as a communication is created when a ticket is created.
+        first_message = not self.description
         self.description = self.description or c.content
         # Save the ticket, allowing for hooks to run.
         self.save()
+
+        # Email tickets reach after_insert without a body, so the agent notification
+        # would show an empty message. Announce them here, once the opening mail has
+        # filled the description.
+        if (
+            first_message
+            and self.description
+            and c.sent_or_received == "Received"
+            and not frappe.flags.initial_sync
+        ):
+            self.notify_agents_new_ticket()
 
     def attach_file_with_doc(self, doctype, docname, file_url):
         if frappe.db.exists(
@@ -1413,9 +1634,29 @@ def has_permission(doc, user=None):
         return True
     if _is_customer_manager(doc.customer, user):
         return True
+    # The list already shows every ticket of a company-wide customer; opening
+    # one must pass too.
+    if doc.customer and doc.customer in _get_company_wide_customers(user):
+        return True
+    if _user_in_cc(doc, user):
+        return True
     if not is_agent(user):
         return False
     return _agent_has_permission(doc, user)
+
+
+def _user_in_cc(doc, user: str) -> bool:
+    """A user CC'd on the ticket may view it, even if it is not their own.
+
+    CC is both an email loop and a visibility grant, matched on the user's email
+    against the stored participant list."""
+    cc = doc.get("fab_cc")
+    if not cc:
+        return False
+    email = (frappe.db.get_value("User", user, "email") or user or "").lower()
+    if not email:
+        return False
+    return email in {addr.lower() for _, addr in getaddresses([cc]) if addr}
 
 
 def _is_customer_manager(customer: str, user: str) -> bool:
@@ -1464,12 +1705,32 @@ def permission_query(user: str | None = None):
 
 
 def _customer_query(user: str) -> str:
-    """Non-agents see their own tickets, plus all tickets of customers they manage."""
+    """Non-agents see their own tickets, plus all tickets of customers whose whole
+    set is visible to them: customers they manage, and customers configured for
+    company-wide ticket visibility (fab_ticket_visibility = Company-wide)."""
     query = _get_base_visibility(user)
-    managed_customers = _get_managed_customers(user)
-    if managed_customers:
-        query += " OR " + _build_in_clause("customer", managed_customers)
+    visible_customers = _get_full_view_customers(user)
+    if visible_customers:
+        query += " OR " + _build_in_clause("customer", visible_customers)
     return query
+
+
+def _get_company_wide_customers(user: str) -> list[str]:
+    """Customers the user belongs to whose ticket visibility is set to company-wide,
+    so every member sees all of that customer's tickets, not just managers."""
+    if not frappe.db.has_column("HD Customer", "fab_ticket_visibility"):
+        return []
+    return [
+        c
+        for c in get_customers(user)
+        if frappe.db.get_value("HD Customer", c, "fab_ticket_visibility")
+        == "Company-wide"
+    ]
+
+
+def _get_full_view_customers(user: str) -> list[str]:
+    """Customers whose entire ticket set the user may see: managed + company-wide."""
+    return list(set(_get_managed_customers(user)) | set(_get_company_wide_customers(user)))
 
 
 def _agent_query(user: str) -> str | None:
@@ -1586,10 +1847,8 @@ def close_tickets_after_n_days():
     # cant do set_value because SLA will not be applied as setting directly to db and doc is not running.
     for ticket in tickets_to_close:
         doc = frappe.get_doc("HD Ticket", ticket)
-        doc.status = "Closed"
-        doc.flags.ignore_validate = True
         try:
-            doc.save(ignore_permissions=True)
+            doc.close_silently()
             # activity log for auto closing the ticket
             log_ticket_activity(
                 doc.name,
