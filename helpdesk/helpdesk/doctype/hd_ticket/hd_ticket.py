@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import timedelta
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 
 import frappe
 from bs4 import BeautifulSoup, Comment
@@ -639,6 +639,18 @@ class HDTicket(Document):
                 "HD Ticket Comment", c.name, attachment.get("file_url")
             )
 
+    def _merge_reply_cc(self, cc, recipients):
+        """Union of the ticket's stored CC participants and any CC the agent
+        typed, minus the primary recipients. Returns a comma-joined string or None."""
+        to_addrs = {addr.lower() for _, addr in getaddresses([recipients or ""]) if addr}
+        out = []
+        for raw in (self.get("fab_cc"), cc):
+            for _, addr in getaddresses([raw or ""]):
+                addr = addr.lower()
+                if addr and "@" in addr and addr not in to_addrs and addr not in out:
+                    out.append(addr)
+        return ", ".join(out) or None
+
     @frappe.whitelist()
     def reply_via_agent(
         self,
@@ -671,6 +683,10 @@ class HDTicket(Document):
 
         if recipients == "Administrator":
             recipients = frappe.get_value("User", "Administrator", "email")
+
+        # loop in the ticket's CC participants (captured from inbound mail),
+        # merged with anything the agent typed, minus the primary recipients
+        cc = self._merge_reply_cc(cc, recipients)
 
         communication = frappe.get_doc(
             {
