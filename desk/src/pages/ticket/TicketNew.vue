@@ -37,10 +37,17 @@
           />
         </div>
         <div
-          v-if="slaPolicy.data?.applies"
+          v-if="selectedType && slaPolicy.data"
           class="flex flex-col gap-3 rounded border border-outline-gray-2 bg-surface-gray-1 p-4"
         >
-          <div class="prose-f text-sm" v-html="sanitize(slaPolicy.data.policy_html)" />
+          <div
+            v-if="slaPolicy.data.applies"
+            class="prose-f text-sm"
+            v-html="sanitize(slaPolicy.data.policy_html)"
+          />
+          <div v-else class="text-p-sm text-ink-gray-5">
+            {{ __("For this category we handle requests on a best-effort basis during office hours, taking the selected priority into account.") }}
+          </div>
           <div class="flex flex-col gap-2">
             <span class="block text-sm text-ink-gray-7">
               {{ __("Priority level") }}
@@ -53,12 +60,6 @@
               :placeholder="__('Select the level')"
             />
           </div>
-        </div>
-        <div
-          v-else-if="selectedType && slaPolicy.data && !slaPolicy.data.applies"
-          class="text-p-sm text-ink-gray-5 rounded border border-outline-gray-2 p-3"
-        >
-          {{ __("No specific SLA applies to this category.") }}
         </div>
       </div>
       <!-- custom fields -->
@@ -356,7 +357,7 @@ const ticket = createResource({
   validate: (params) => {
     if (isCustomerPortal.value) {
       if (!selectedType.value) return __("Please select a category");
-      if (slaPolicy.data?.applies && !selectedLevel.value) {
+      if (!selectedLevel.value) {
         return __("Please select a priority level");
       }
     }
