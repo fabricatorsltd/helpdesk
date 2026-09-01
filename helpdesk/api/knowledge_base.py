@@ -105,7 +105,7 @@ def get_categories(language: str | None = None):
         fields=["name", "category_name", "modified"],
     )
     article_filters = {"status": "Published"}
-    if language:
+    if language and frappe.db.has_column("HD Article", "fab_language"):
         article_filters["fab_language"] = language
     for c in categories:
         # get_list (not db.count) so the audience permission filter and the
@@ -127,7 +127,7 @@ def get_categories(language: str | None = None):
 @frappe.whitelist()
 def get_category_articles(category: str, language: str | None = None):
     filters = {"category": category, "status": "Published"}
-    if language:
+    if language and frappe.db.has_column("HD Article", "fab_language"):
         filters["fab_language"] = language
     articles = frappe.get_list(
         "HD Article",
