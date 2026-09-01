@@ -99,32 +99,16 @@ def get_default_email_content(type: str) -> str:
 
     if type == "reply_to_agents":
         return """\
-<div>
-  <p>Hello,</p>
-  <p>You have a new reply on the ticket <strong>#{{ doc.name }}</strong>.</p>
-  <p><strong>Subject:</strong> {{ doc.subject }}</p>
-  <p><strong>Raised By:</strong> {{ doc.raised_by }}</p>
-  <p><strong>Priority:</strong> {{ doc.priority }}</p>
-   <div style="margin-bottom: 10px">
-    <p style="margin-bottom: 20px">Message</p>
-    <div
-      style="
-        background: #f3f5f8;
-        padding: 10px;
-        border-radius: 4px;
-        border: 1px solid #e5e9ee;
-      "
-    >
-      {{ message }}
-    </div>
-  </div>
-  <br />
-  <p>
-    You can view and respond to this ticket by
-    <a href="{{ ticket_url }}">clicking here</a>.
-  </p>
-  <p>Regards,<br />Support Team</p>
-</div>
+<p>{{ _("A new reply has arrived on a support request.") }}</p>
+<table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
+  <tr><td style="color:#8d95a0;">{{ _("Request") }}</td><td><strong>#{{ doc.name }}</strong> - {{ doc.subject }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("From") }}</td><td>{{ raised_by }}{% if contact_name %} ({{ contact_name }}){% endif %}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Customer") }}</td><td>{{ customer or _("Not associated") }}</td></tr>
+  <tr><td style="color:#8d95a0;">{{ _("Priority") }}</td><td>{{ doc.priority }}</td></tr>
+</table>
+<p style="margin-top:14px;color:#8d95a0;">{{ _("Message") }}</p>
+<div style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">{{ message }}</div>
+<p style="margin-top:14px;"><a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
 """
 
     if type == "reply_via_agent":
