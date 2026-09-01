@@ -4,14 +4,26 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import get_user_info_for_avatar
 
-from helpdesk.utils import is_agent
+from helpdesk.utils import get_customers, is_agent
+
+
+def _reader_can_see_article(article) -> bool:
+    """Audience gate for non-staff readers: published, and either public or
+    restricted to one of the reader's customers. The fab_* fields are optional
+    (present only when fab_helpdesk is installed); missing means public."""
+    if article.get("status") != "Published":
+        return False
+    if (article.get("fab_visibility") or "Public") == "Public":
+        return True
+    allowed = {r.get("customer") for r in (article.get("fab_customers") or [])}
+    return bool(set(get_customers()) & allowed)
 
 
 @frappe.whitelist(allow_guest=True)
 def get_article(name: str):
     article = frappe.get_doc("HD Article", name).as_dict()
 
-    if not is_agent() and article["status"] != "Published":
+    if not is_agent() and not _reader_can_see_article(article):
         frappe.throw(_("Access denied"), frappe.PermissionError)
 
     author = get_user_info_for_avatar(article["author"])
@@ -87,14 +99,24 @@ def move_to_category(category: str, articles: list[str]):
 
 
 @frappe.whitelist()
-def get_categories():
+def get_categories(language: str | None = None):
     categories = frappe.get_list(
         "HD Article Category",
         fields=["name", "category_name", "modified"],
     )
+    article_filters = {"status": "Published"}
+    if language:
+        article_filters["fab_language"] = language
     for c in categories:
-        c["article_count"] = frappe.db.count(
-            "HD Article", filters={"category": c.name, "status": "Published"}
+        # get_list (not db.count) so the audience permission filter and the
+        # optional language filter both apply to the visible-article count.
+        c["article_count"] = len(
+            frappe.get_list(
+                "HD Article",
+                filters={**article_filters, "category": c.name},
+                pluck="name",
+                limit_page_length=0,
+            )
         )
 
     categories.sort(key=lambda c: c["article_count"], reverse=True)
@@ -103,10 +125,13 @@ def get_categories():
 
 
 @frappe.whitelist()
-def get_category_articles(category: str):
+def get_category_articles(category: str, language: str | None = None):
+    filters = {"category": category, "status": "Published"}
+    if language:
+        filters["fab_language"] = language
     articles = frappe.get_list(
         "HD Article",
-        filters={"category": category, "status": "Published"},
+        filters=filters,
         fields=["name", "title", "published_on", "modified", "author", "content"],
     )
     for article in articles:
