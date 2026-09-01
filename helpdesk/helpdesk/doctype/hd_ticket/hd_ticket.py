@@ -1529,12 +1529,32 @@ def permission_query(user: str | None = None):
 
 
 def _customer_query(user: str) -> str:
-    """Non-agents see their own tickets, plus all tickets of customers they manage."""
+    """Non-agents see their own tickets, plus all tickets of customers whose whole
+    set is visible to them: customers they manage, and customers configured for
+    company-wide ticket visibility (fab_ticket_visibility = Company-wide)."""
     query = _get_base_visibility(user)
-    managed_customers = _get_managed_customers(user)
-    if managed_customers:
-        query += " OR " + _build_in_clause("customer", managed_customers)
+    visible_customers = _get_full_view_customers(user)
+    if visible_customers:
+        query += " OR " + _build_in_clause("customer", visible_customers)
     return query
+
+
+def _get_company_wide_customers(user: str) -> list[str]:
+    """Customers the user belongs to whose ticket visibility is set to company-wide,
+    so every member sees all of that customer's tickets, not just managers."""
+    if not frappe.db.has_column("HD Customer", "fab_ticket_visibility"):
+        return []
+    return [
+        c
+        for c in get_customers(user)
+        if frappe.db.get_value("HD Customer", c, "fab_ticket_visibility")
+        == "Company-wide"
+    ]
+
+
+def _get_full_view_customers(user: str) -> list[str]:
+    """Customers whose entire ticket set the user may see: managed + company-wide."""
+    return list(set(_get_managed_customers(user)) | set(_get_company_wide_customers(user)))
 
 
 def _agent_query(user: str) -> str | None:

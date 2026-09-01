@@ -152,6 +152,8 @@ def get_meta(template: str):
 
 
 def get_customer_criteria():
+    from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import _get_full_view_customers
+
     QBTicket = frappe.qb.DocType("HD Ticket")
     user = frappe.session.user
     conditions = [
@@ -159,8 +161,9 @@ def get_customer_criteria():
         QBTicket.raised_by == user,
         QBTicket.owner == user,
     ]
-    customer = get_customers(user)
-    for c in customer:
+    # Whole-customer visibility only for customers the user manages or that are
+    # configured company-wide; a plain member sees just their own tickets.
+    for c in _get_full_view_customers(user):
         conditions.append(QBTicket.customer == c)
     # CC is a visibility grant: a user CC'd on a ticket sees it in their list
     email = frappe.db.get_value("User", user, "email") or user
