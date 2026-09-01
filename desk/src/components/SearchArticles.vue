@@ -4,7 +4,7 @@
     class="rounded border p-4 text-base"
   >
     <div class="mb-2 font-medium pl-2" v-if="!hideViewAll">
-      These articles may already cover what you are looking for
+      {{ __("These articles may already cover what you are looking for") }}
       <RouterLink
         class="group cursor-pointer space-x-1 hover:text-ink-gray-9"
         :to="{
@@ -66,9 +66,9 @@
   >
     <LucideSearch class="size-8 text-ink-gray-3" />
     <div class="flex items-center flex-col justify-center">
-      <p class="font-base">Searching...</p>
+      <p class="font-base">{{ __("Searching...") }}</p>
       <span class="font-base text-p-sm text-ink-gray-5 text-center"
-        >Please wait while we search for the answers</span
+        >{{ __("Please wait while we search for the answers") }}</span
       >
     </div>
   </div>
@@ -78,12 +78,21 @@
 import { capture } from "@/telemetry";
 import { createResource } from "frappe-ui";
 import { watch } from "vue";
+import { useAuthStore } from "@/stores/auth";
+import { kbLanguage } from "@/stores/knowledgeBase";
+
 interface P {
   query: string;
   hideViewAll?: boolean;
 }
 
 const { query = "", hideViewAll = false } = defineProps<P>();
+const authStore = useAuthStore();
+// Suggest in the language the reader is browsing the KB in, else their own.
+function currentLanguage() {
+  const lang = kbLanguage.value || authStore.language || "";
+  return lang ? lang.split(/[-_]/)[0] : undefined;
+}
 const articles = createResource({
   url: "helpdesk.api.article.search",
   debounce: 500,
@@ -96,6 +105,7 @@ watch(
     articles.update({
       params: {
         query: query,
+        language: currentLanguage(),
       },
     });
     articles.reload();

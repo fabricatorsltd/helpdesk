@@ -50,6 +50,13 @@ def get_article(name: str):
         ),
         "category_id": article.category,
         "feedback": int(feedback),
+        # Audience/language for the agent editor. The customer list is only
+        # exposed to staff (it names other customers who can see the article).
+        "fab_visibility": article.get("fab_visibility") or "Public",
+        "fab_language": article.get("fab_language"),
+        "fab_customers": [r.get("customer") for r in (article.get("fab_customers") or [])]
+        if is_agent()
+        else [],
     }
 
     return article

@@ -23,8 +23,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed } from "vue";
-import { categoryName } from "@/stores/knowledgeBase";
+import { onMounted, computed, watch } from "vue";
+import { categoryName, kbLanguage } from "@/stores/knowledgeBase";
 import { Breadcrumbs, createResource, usePageMeta } from "frappe-ui";
 import LayoutHeader from "@/components/LayoutHeader.vue";
 import ArticleCard from "@/components/knowledge-base/ArticleCard.vue";
@@ -39,12 +39,17 @@ const props = defineProps({
 
 const articles = createResource({
   url: "helpdesk.api.knowledge_base.get_category_articles",
-  cache: ["articles", props.categoryId],
-  params: {
-    category: props.categoryId,
+  makeParams() {
+    return {
+      category: props.categoryId,
+      language: kbLanguage.value || undefined,
+    };
   },
   auto: true,
 });
+
+// Re-filter when the customer switches language from the KB home.
+watch(kbLanguage, () => articles.reload());
 
 onMounted(() => {
   categoryName.fetch({

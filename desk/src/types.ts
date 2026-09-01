@@ -411,6 +411,9 @@ export interface Article {
   content: string;
   modified: string;
   feedback: FeedbackAction;
+  fab_visibility?: string;
+  fab_language?: string;
+  fab_customers?: string[];
 }
 
 export type FeedbackAction = 0 | 1 | 2; // 0: neutral, 1: like, 2: dislike
