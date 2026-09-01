@@ -46,7 +46,13 @@ class HelpdeskUserInvitation(UserInvitation):
 
     def _helpdesk_invite_link(self, key: str) -> str:
         path = f"/api/method/frappe.core.api.user_invitation.accept_invitation?key={key}"
-        host = (frappe.conf.get("helpdesk_host") or "").strip()
+        # Route the accept link to the customer portal host. Prefer the configured
+        # HD Settings helpdesk_url (config-as-code, e.g. https://help.example.com);
+        # fall back to the site_config override and only then to get_url, whose
+        # host_name points at the desk domain (wrong host for a customer).
+        host = (frappe.db.get_single_value("HD Settings", "helpdesk_url") or "").strip()
+        if not host:
+            host = (frappe.conf.get("helpdesk_host") or "").strip()
         if not host:
             return frappe.utils.get_url(path)
         if not host.startswith(("http://", "https://")):
