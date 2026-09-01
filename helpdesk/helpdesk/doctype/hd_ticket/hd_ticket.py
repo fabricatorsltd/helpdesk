@@ -192,7 +192,10 @@ class HDTicket(Document):
         ):
             self.send_acknowledgement_email()
 
-        if not self.via_customer_portal and not frappe.flags.initial_sync:
+        # Notify agents of every new ticket, including portal-created ones. Upstream
+        # only notified on email tickets, so tickets opened from the customer portal
+        # went unseen until someone happened to look at the queue.
+        if not frappe.flags.initial_sync:
             self.notify_agents_new_ticket()
 
     def capture_ticket_created_telemetry_events(self):
