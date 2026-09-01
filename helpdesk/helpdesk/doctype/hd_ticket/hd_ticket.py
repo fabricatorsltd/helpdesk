@@ -654,6 +654,21 @@ class HDTicket(Document):
     def _cc_list(self):
         return [addr.lower() for _, addr in getaddresses([self.get("fab_cc") or ""]) if addr]
 
+    def _own_mailboxes(self):
+        """Lowercased addresses of our own Email Accounts. Replies must never go
+        to one of these: the message would loop back into the inbox."""
+        return {a.lower() for a in frappe.get_all("Email Account", pluck="email_id") if a}
+
+    def _strip_own_mailboxes(self, raw):
+        """Parse an address string and drop any of our own mailboxes, keeping the
+        original (display-name) form of the rest."""
+        own = self._own_mailboxes()
+        return [
+            (f"{name} <{addr}>" if name else addr)
+            for name, addr in getaddresses([raw or ""])
+            if addr and "@" in addr and addr.lower() not in own
+        ]
+
     @frappe.whitelist()
     def add_cc(self, email):
         if not is_agent():
@@ -714,6 +729,16 @@ class HDTicket(Document):
 
         if recipients == "Administrator":
             recipients = frappe.get_value("User", "Administrator", "email")
+
+        # Never send the reply to one of our own mailboxes. Replying from the
+        # thread to an email whose sender is the support address (an ack or a
+        # previous agent reply) would otherwise target the inbox itself, loop
+        # the message back in and spawn a duplicate ticket. Drop our addresses
+        # and fall back to the requester when nothing valid is left.
+        to_list = self._strip_own_mailboxes(recipients)
+        if not to_list:
+            to_list = self._strip_own_mailboxes(self.raised_by)
+        recipients = ", ".join(to_list)
 
         # loop in the ticket's CC participants (captured from inbound mail),
         # merged with anything the agent typed, minus the primary recipients
