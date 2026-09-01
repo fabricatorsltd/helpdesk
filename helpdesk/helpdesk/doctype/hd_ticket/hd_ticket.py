@@ -185,11 +185,9 @@ class HDTicket(Document):
         send_ack_email = frappe.db.get_single_value(
             "HD Settings", "send_acknowledgement_email"
         )
-        if (
-            not self.via_customer_portal
-            and not frappe.flags.initial_sync
-            and send_ack_email
-        ):
+        # Acknowledge every new ticket to the requester, portal-created included,
+        # so they always get the ticket number and reply-by-email link.
+        if not frappe.flags.initial_sync and send_ack_email:
             self.send_acknowledgement_email()
 
         # Notify agents of every new ticket, including portal-created ones. Upstream
