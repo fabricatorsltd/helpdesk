@@ -815,11 +815,9 @@ class HDTicket(Document):
     def create_communication_via_contact(
         self, message: str, attachments: list[dict] = [], new_ticket: bool = False
     ):
-        if not new_ticket and frappe.db.get_single_value(
-            "HD Settings", "enable_reply_email_to_agent"
-        ):
-            # send email to assigned agents
-            self.send_reply_email_to_agent(message)
+        # Agents are notified centrally from on_communication_update when the
+        # Received communication below is inserted, so portal and email replies
+        # take the same path (see notify_agents_new_reply).
 
         # if self.status_category == "Paused" and not new_ticket:
         if not new_ticket:
@@ -879,39 +877,88 @@ class HDTicket(Document):
                 doc.attached_to_name = self.name
                 doc.save()
 
-    def send_reply_email_to_agent(
-        self, message: str = "Please check the latest update on the portal."
-    ):
-        assigned_agents = self.get_assigned_agents()
-        if not assigned_agents:
+    def _internal_reply_addresses(self):
+        """Our own mailboxes and active agents. A reply from any of these is not
+        a customer reply and must not trigger the agent notification."""
+        addrs = {a.lower() for a in frappe.get_all("Email Account", pluck="email_id") if a}
+        addrs |= {
+            a.lower() for a in frappe.get_all("HD Agent", pluck="name") if a and "@" in a
+        }
+        return addrs
+
+    def notify_agents_new_reply(self, c):
+        """Email agents when someone who is not an agent replies to the ticket.
+
+        Called from on_communication_update, so it covers every reply channel:
+        inbound email and portal both create a Communication and land here. The
+        opening message is left to notify_agents_new_ticket; agent replies and
+        our own auto-mail are filtered out by sender. Guarded to fire once, on
+        the communication's insert, so later edits don't re-notify."""
+        if not getattr(c.flags, "in_insert", False):
+            return
+        if not frappe.db.get_single_value("HD Settings", "enable_reply_email_to_agent"):
+            return
+        if (c.communication_type or "") != "Communication":
+            return
+        sender = (c.sender or "").lower()
+        if not sender or sender in self._internal_reply_addresses():
+            return
+        # The opener is announced by notify_agents_new_ticket; notify only replies.
+        if (
+            frappe.db.count(
+                "Communication",
+                {"reference_doctype": "HD Ticket", "reference_name": self.name},
+            )
+            <= 1
+        ):
             return
 
-        recipients = [a.get("name") for a in self.get_assigned_agents()]
+        active_agents = frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
+        assigned = {a.get("name") for a in (self.get_assigned_agents() or [])}
+        # Assigned agents handle the ticket; fall back to the whole active team so
+        # a reply on an unassigned ticket never goes unseen.
+        recipients = [a for a in active_agents if a in assigned] or active_agents
+        recipients = [r for r in recipients if r and "@" in r and r.lower() != sender]
+        if not recipients:
+            return
+
+        contact_name = None
+        if self.contact:
+            names = frappe.db.get_value(
+                "Contact", self.contact, ["first_name", "last_name"]
+            )
+            if names:
+                contact_name = " ".join(p for p in names if p) or None
 
         email_content = frappe.db.get_single_value(
             "HD Settings", "reply_email_to_agent_content"
         )
-        default_email_content = get_default_email_content("reply_to_agents")
+        default_content = get_default_email_content("reply_to_agents")
         try:
-            frappe.sendmail(
-                recipients=recipients,
-                subject=f"Re: {self.subject} - #{self.name}",
-                message=self._get_rendered_template(
-                    email_content,
-                    default_email_content,
-                    {
-                        "ticket_url": frappe.utils.get_url(
-                            "/helpdesk/tickets/" + str(self.name)
-                        ),
-                        "message": message,
-                    },
-                ),
-                reference_doctype="HD Ticket",
-                reference_name=self.name,
-                now=True,
-            )
-        except Exception as e:
-            frappe.throw(_(e))
+            with use_language(get_default_language()):
+                frappe.sendmail(
+                    recipients=recipients,
+                    subject=_("[New reply] #{0}: {1}").format(self.name, self.subject),
+                    message=self._get_rendered_template(
+                        email_content,
+                        default_content,
+                        {
+                            "raised_by": self.raised_by,
+                            "contact_name": contact_name,
+                            "customer": self.customer,
+                            "message": c.content,
+                            "ticket_url": frappe.utils.get_url(
+                                "/helpdesk/tickets/" + str(self.name)
+                            ),
+                        },
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    email_headers={"X-Auto-Generated": "hd-new-reply-agents"},
+                )
+        except Exception:
+            self.log_error("Could not notify agents of the new reply")
 
     def send_acknowledgement_email(self):
         acknowledgement_email_content = frappe.db.get_single_value(
@@ -1139,6 +1186,9 @@ class HDTicket(Document):
                 self.status = self.default_open_status
             # if received that means customer has replied
             self.last_customer_response = frappe.utils.now_datetime()
+            # Notify agents of the reply, on any channel (email-in and portal
+            # both create a Received communication that reaches this handler).
+            self.notify_agents_new_reply(c)
         # If communication is outgoing, it must be a reply from agent
         if c.sent_or_received == "Sent":
             # Ignore system notifications
