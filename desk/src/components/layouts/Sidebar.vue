@@ -131,6 +131,7 @@ const PORTAL_LANGUAGES = [
   { code: "it", label: "Italiano" },
   { code: "en", label: "English" },
   { code: "fr", label: "Français" },
+  { code: "es", label: "Español" },
 ];
 
 async function setLanguage(code: string) {
