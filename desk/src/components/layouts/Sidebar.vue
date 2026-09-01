@@ -125,9 +125,35 @@ const themeMenuItem = computed(() => ({
   onClick: () => toggleTheme(),
 }));
 
+const PORTAL_LANGUAGES = [
+  { code: "it", label: "Italiano" },
+  { code: "en", label: "English" },
+  { code: "fr", label: "Français" },
+  { code: "es", label: "Español" },
+];
+
+async function setLanguage(code: string) {
+  try {
+    await call("helpdesk.api.general.set_language", { language: code });
+    window.location.reload();
+  } catch (e) {
+    toast.error(__("Could not change the language"));
+  }
+}
+
+const languageMenuGroup = computed(() => ({
+  group: __("Language"),
+  items: PORTAL_LANGUAGES.map((l) => ({
+    label: l.label,
+    icon: "lucide-languages",
+    onClick: () => setLanguage(l.code),
+  })),
+}));
+
 const isFCSite = ref(window.is_fc_site);
 
 const customerPortalDropdown = computed(() => [
+  languageMenuGroup.value,
   {
     group: __("Danger"),
     hideLabel: true,
