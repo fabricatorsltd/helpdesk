@@ -38,6 +38,58 @@
       >
         <!-- Top Element -->
         <div class="flex flex-col gap-3">
+          <!-- Audience + language (agent editor) -->
+          <div
+            v-if="editable && !isCustomerPortal"
+            class="flex flex-wrap items-end gap-3 pb-3 border-b"
+          >
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-ink-gray-5">{{ __("Language") }}</span>
+              <Select
+                v-model="fabLanguage"
+                :options="KB_LANGUAGES"
+                @update:modelValue="onAudienceChange"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-ink-gray-5">{{ __("Visibility") }}</span>
+              <Select
+                v-model="fabVisibility"
+                :options="VISIBILITY_OPTIONS"
+                @update:modelValue="onAudienceChange"
+              />
+            </div>
+            <div
+              v-if="fabVisibility === 'Restricted'"
+              class="flex flex-col gap-1 min-w-[240px]"
+            >
+              <span class="text-xs text-ink-gray-5">{{
+                __("Visible to customers")
+              }}</span>
+              <div v-if="fabCustomers.length" class="flex flex-wrap gap-1.5 mb-1">
+                <span
+                  v-for="c in fabCustomers"
+                  :key="c"
+                  class="flex items-center gap-1 rounded bg-surface-gray-3 px-2 py-0.5 text-p-sm text-ink-gray-7"
+                >
+                  {{ c }}
+                  <button
+                    class="text-ink-gray-5 hover:text-ink-gray-8"
+                    :title="__('Remove')"
+                    @click="removeCustomer(c)"
+                  >
+                    <IconX class="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+              <Autocomplete
+                :placeholder="__('Add a customer...')"
+                :options="availableCustomers"
+                :value="null"
+                @change="addCustomer"
+              />
+            </div>
+          </div>
           <!-- Title -->
           <div class="flex sm:flex-row flex-col justify-between">
             <div class="w-full">
@@ -282,13 +334,16 @@ import {
   debounce,
   Dropdown,
   LoadingIndicator,
+  Select,
   toast,
   usePageMeta,
 } from "frappe-ui";
+import { Autocomplete } from "@/components";
 import { Editor, EditorContent, EditorFixedMenu } from "frappe-ui/editor";
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import IconDot from "~icons/lucide/dot";
+import IconX from "~icons/lucide/x";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
 
 const extensions = buildEditorExtensions();
@@ -350,6 +405,52 @@ const dislikes = ref(0);
 const views = ref(0);
 const content = ref("");
 const title = ref("");
+
+// Audience + language controls (agent editor only)
+const fabVisibility = ref("Public");
+const fabLanguage = ref("");
+const fabCustomers = ref<string[]>([]);
+const KB_LANGUAGES = [
+  { label: __("Not set"), value: "" },
+  { label: "Italiano", value: "it" },
+  { label: "English", value: "en" },
+  { label: "Français", value: "fr" },
+  { label: "Español", value: "es" },
+];
+const VISIBILITY_OPTIONS = [
+  { label: __("Public"), value: "Public" },
+  { label: __("Restricted"), value: "Restricted" },
+];
+const customerOptions = createResource({
+  url: "frappe.client.get_list",
+  makeParams: () => ({
+    doctype: "HD Customer",
+    fields: ["name"],
+    limit_page_length: 0,
+    order_by: "name asc",
+  }),
+  auto: true,
+  transform: (data: { name: string }[]) =>
+    data.map((c) => ({ label: c.name, value: c.name })),
+});
+const availableCustomers = computed(() =>
+  (customerOptions.data || []).filter(
+    (o: { value: string }) => !fabCustomers.value.includes(o.value)
+  )
+);
+function addCustomer(option: { value?: string } | null) {
+  if (option?.value && !fabCustomers.value.includes(option.value)) {
+    fabCustomers.value = [...fabCustomers.value, option.value];
+    isDirty.value = true;
+  }
+}
+function removeCustomer(name: string) {
+  fabCustomers.value = fabCustomers.value.filter((c) => c !== name);
+  isDirty.value = true;
+}
+function onAudienceChange() {
+  isDirty.value = true;
+}
 const feedback = ref<FeedbackAction>();
 
 const titleRef = ref(null);
@@ -382,6 +483,9 @@ const article: Resource<Article> = createResource({
     content.value = data.content;
     title.value = data.title;
     feedback.value = data.feedback;
+    fabVisibility.value = data.fab_visibility || "Public";
+    fabLanguage.value = data.fab_language || "";
+    fabCustomers.value = data.fab_customers || [];
     if (isCustomerPortal.value) {
       capture("article_viewed", {
         data: {
@@ -526,6 +630,12 @@ function handleArticleUpdate() {
       fieldname: {
         content: content.value,
         title: title.value,
+        fab_visibility: fabVisibility.value,
+        fab_language: fabLanguage.value || null,
+        fab_customers:
+          fabVisibility.value === "Restricted"
+            ? fabCustomers.value.map((c) => ({ customer: c }))
+            : [],
       },
     },
     {

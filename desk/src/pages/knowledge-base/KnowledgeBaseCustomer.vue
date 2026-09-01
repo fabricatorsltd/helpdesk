@@ -4,6 +4,13 @@
       <template #left-header>
         <div class="text-lg-medium text-ink-gray-9">{{ __("Knowledge Base") }}</div>
       </template>
+      <template #right-header>
+        <Select
+          :modelValue="kbLanguage"
+          @update:modelValue="onLanguageChange"
+          :options="languageOptions"
+        />
+      </template>
     </LayoutHeader>
     <div
       class="max-w-4xl 2xl:max-w-5xl pt-4 sm:px-5 w-full flex flex-col gap-4"
@@ -30,15 +37,37 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { usePageMeta } from "frappe-ui";
+import { usePageMeta, Select } from "frappe-ui";
 
 import { LayoutHeader } from "@/components";
 import CategoryFolderContainer from "@/components/knowledge-base/CategoryFolderContainer.vue";
 import SearchPopover from "@/components/SearchPopover.vue";
 import { capture } from "@/telemetry";
 import { __ } from "@/translation";
+import { kbLanguage, categories } from "@/stores/knowledgeBase";
+import { useAuthStore } from "@/stores/auth";
 
 const query = ref("");
+
+const languageOptions = [
+  { label: "Italiano", value: "it" },
+  { label: "English", value: "en" },
+  { label: "Français", value: "fr" },
+  { label: "Español", value: "es" },
+];
+
+// Seed the KB filter with the user's language on first view (synchronously, so
+// the category fetch in the child container already carries it).
+const authStore = useAuthStore();
+if (!kbLanguage.value) {
+  const lang = (authStore.language || "it").split(/[-_]/)[0];
+  kbLanguage.value = languageOptions.some((o) => o.value === lang) ? lang : "it";
+}
+
+function onLanguageChange(value: string) {
+  kbLanguage.value = value;
+  categories.fetch();
+}
 
 onMounted(() => {
   capture("kb_customer_page_viewed");

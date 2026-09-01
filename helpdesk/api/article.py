@@ -68,8 +68,39 @@ def get_article_stats(article_name: str):
     }
 
 
+def _article_name(item) -> str | None:
+    """Article name from a search hit, whether it exposes .name, .id or a dict."""
+    name = getattr(item, "name", None)
+    if not name and isinstance(item, dict):
+        name = item.get("name") or (item.get("id") or "").split(":", 1)[-1]
+    if not name:
+        raw = getattr(item, "id", "") or ""
+        name = raw.split(":", 1)[-1] if ":" in raw else None
+    return name
+
+
+def _filter_visible_articles(items: list, language: str | None) -> list:
+    """Keep only the search hits the caller may actually see (audience) and, when
+    given, that match the language. Audience is enforced by running the candidate
+    names back through get_list, which applies the HD Article permission query."""
+    names = [n for n in (_article_name(i) for i in items) if n]
+    if not names:
+        return items
+    filters = {"name": ["in", names], "status": "Published"}
+    if language and frappe.db.has_column("HD Article", "fab_language"):
+        filters["fab_language"] = language
+    visible = set(
+        frappe.get_list("HD Article", filters=filters, pluck="name", limit_page_length=0)
+    )
+    return [i for i in items if _article_name(i) in visible]
+
+
 @frappe.whitelist()
-def search(query: str) -> list:
+def search(query: str, language: str | None = None) -> list:
+    return _filter_visible_articles(_raw_search(query), language)
+
+
+def _raw_search(query: str) -> list:
     query = sanitize_query(query)
     ret, enough = search_with_enough_results([], query)
     if enough:
