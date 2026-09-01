@@ -586,6 +586,9 @@ function handleDiscard() {
   isDirty.value = false;
   title.value = article.data.title;
   content.value = article.data.content;
+  fabVisibility.value = article.data.fab_visibility || "Public";
+  fabLanguage.value = article.data.fab_language || "";
+  fabCustomers.value = article.data.fab_customers || [];
   const original = addLinksToHeadings(article.data.content);
   textEditorContentWithIDs.value = null;
   nextTick(() => {
