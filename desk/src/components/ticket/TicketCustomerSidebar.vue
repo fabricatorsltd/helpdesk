@@ -2,7 +2,7 @@
   <div class="flex w-[382px] flex-col border-l gap-4">
     <!-- Ticket ID -->
     <div class="flex items-center justify-between border-b px-5 py-3">
-      <span class="cursor-copy text-lg-semibold">Ticket details</span>
+      <span class="cursor-copy text-lg-semibold">{{ __("Ticket details") }}</span>
     </div>
     <!-- user info and sla info -->
     <div class="flex flex-col gap-4 pt-0 px-5 py-3 border-b">
@@ -56,7 +56,7 @@
         :key="data.label"
         class="flex items-center text-base"
       >
-        <div class="w-[126px] text-ink-gray-5 text-sm">{{ data.title }}</div>
+        <div class="w-[126px] text-ink-gray-5 text-sm">{{ __(data.title) }}</div>
         <div
           class="break-words text-base text-ink-gray-8 flex items-center gap-2"
         >
@@ -120,6 +120,7 @@
 <script setup lang="ts">
 import { ITicket } from "@/pages/ticket/symbols";
 import { Field } from "@/types";
+import { __ } from "@/translation";
 import { dateFormat, dateTooltipFormat, formatTime } from "@/utils";
 import { Avatar, dayjs, Tooltip } from "frappe-ui";
 import { computed, inject } from "vue";
@@ -154,9 +155,9 @@ function firstResponseData() {
     dayjs().isBefore(dayjs(ticket.data.response_by))
   ) {
     firstResponse = {
-      label: `Due in ${formatTime(
-        dayjs(ticket.data.response_by).diff(dayjs(), "s")
-      )}`,
+      label: __("Due in {0}", [
+        formatTime(dayjs(ticket.data.response_by).diff(dayjs(), "s")),
+      ]),
       color: "orange",
     };
   } else if (
@@ -165,17 +166,19 @@ function firstResponseData() {
     )
   ) {
     firstResponse = {
-      label: `Fulfilled in ${formatTime(
-        dayjs(ticket.data.first_responded_on).diff(
-          dayjs(ticket.data.creation),
-          "s"
-        )
-      )}`,
+      label: __("Fulfilled in {0}", [
+        formatTime(
+          dayjs(ticket.data.first_responded_on).diff(
+            dayjs(ticket.data.creation),
+            "s"
+          )
+        ),
+      ]),
       color: "green",
     };
   } else {
     firstResponse = {
-      label: "Failed",
+      label: __("Failed"),
       color: "red",
     };
   }
@@ -189,21 +192,21 @@ function resolutionData() {
     dayjs().isBefore(ticket.data.resolution_by)
   ) {
     resolution = {
-      label: `Due in ${formatTime(
-        dayjs(ticket.data.resolution_by).diff(dayjs(), "s")
-      )}`,
+      label: __("Due in {0}", [
+        formatTime(dayjs(ticket.data.resolution_by).diff(dayjs(), "s")),
+      ]),
       color: "orange",
     };
   } else if (ticket.data.agreement_status === "Fulfilled") {
     resolution = {
-      label: `Fulfilled in ${formatTime(
-        dayjs(ticket.data.resolution_time, "s")
-      )}`,
+      label: __("Fulfilled in {0}", [
+        formatTime(dayjs(ticket.data.resolution_time, "s")),
+      ]),
       color: "green",
     };
   } else {
     resolution = {
-      label: "Failed",
+      label: __("Failed"),
       color: "red",
     };
   }
@@ -212,12 +215,12 @@ function resolutionData() {
 
 const ticketBasicInfo = computed(() => [
   {
-    label: "Ticket ID",
+    label: __("Ticket ID"),
     value: ticket.data.name,
   },
   {
-    label: "Status",
-    value: ticket.data.status,
+    label: __("Status"),
+    value: __(ticket.data.status),
     bold: true,
   },
 ]);
@@ -226,17 +229,17 @@ const ticketAdditionalInfo = computed(() => {
   const fields = [
     {
       fieldname: "subject",
-      label: "Subject",
+      label: __("Subject"),
       value: ticket.data.subject,
     },
     {
       fieldname: "team",
-      label: "Team",
+      label: __("Team"),
       value: ticket.data.agent_group || "-",
     },
     {
       fieldname: "priority",
-      label: "Priority",
+      label: __("Priority"),
       value: ticket.data.priority,
     },
   ];
@@ -248,7 +251,7 @@ const ticketAdditionalInfo = computed(() => {
     )
     .map((field: Field) => {
       const option = {
-        label: field.label,
+        label: __(field.label),
         value: ticket.data[field.fieldname],
       };
       if (field.fieldtype === "Date") {

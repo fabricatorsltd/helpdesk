@@ -54,9 +54,9 @@
   >
     <LucideSearch class="size-8 text-ink-gray-3" />
     <div class="flex items-center flex-col justify-center">
-      <p class="font-base">No answers found</p>
+      <p class="font-base">{{ __("No answers found") }}</p>
       <span class="font-base text-p-sm text-ink-gray-5 text-center"
-        >Rephrase the question and try again with some keywords</span
+        >{{ __("Rephrase the question and try again with some keywords") }}</span
       >
     </div>
   </div>
