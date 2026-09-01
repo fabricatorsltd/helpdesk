@@ -12,6 +12,7 @@ def after_accept(invitation: Document, user: Document, user_inserted: bool) -> N
         create_agent(user)
 
     if invited_roles & customer_roles:
+        land_on_portal(user)
         contact = get_or_create_contact(invitation, user)
         attach_image(user, contact)
         link_to_customer(
@@ -19,6 +20,25 @@ def after_accept(invitation: Document, user: Document, user_inserted: bool) -> N
             contact,
             is_manager="HD Customer Manager" in invited_roles,
         )
+
+
+def land_on_portal(user: Document) -> None:
+    """Send an invited customer to the helpdesk portal after they set a password.
+
+    The post-login/reset landing is decided by get_default_path(), which returns
+    the desk (the site's default_app) unless the user has their own default_app.
+    The contact-binding hook that would set it does not fire on accept (the
+    invite links the contact with a direct db write, bypassing doc events), so
+    it is set here explicitly. Customers are portal users, never desk users."""
+    updates = {}
+    if user.user_type != "Website User":
+        updates["user_type"] = "Website User"
+    if not user.get("default_app"):
+        updates["default_app"] = "helpdesk"
+    if updates:
+        frappe.db.set_value("User", user.name, updates)
+        for key, value in updates.items():
+            user.set(key, value)
 
 
 def get_or_create_contact(invitation: Document, user: Document) -> str | None:
