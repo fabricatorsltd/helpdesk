@@ -184,12 +184,20 @@
                   <ZapIcon class="h-4 w-4" />
                 </button>
               </Tooltip>
+              <Tooltip :text="__('Insert article')">
+                <button
+                  class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
+                  @click="showInsertArticleModal = true"
+                >
+                  <LucideBookOpen class="h-4 w-4" />
+                </button>
+              </Tooltip>
               <div class="h-4 w-[2px] border-s ml-1" />
             </div>
             <EditorFixedMenu :items="fullToolbar" />
           </div>
           <div class="flex items-center justify-end gap-x-2 sm:mt-0 w-[40%]">
-            <Button label="Discard" @click="handleDiscard" />
+            <Button :label="__('Discard')" @click="handleDiscard" />
             <Button
               variant="solid"
               :disabled="isDisabled"
@@ -206,6 +214,10 @@
       </div>
     </template>
   </Editor>
+  <InsertArticleModal
+    v-model="showInsertArticleModal"
+    @select="insertArticleLink"
+  />
   <SavedRepliesSelectorModal
     v-model="showSavedRepliesSelectorModal"
     :doctype="doctype"
@@ -215,7 +227,12 @@
 </template>
 
 <script setup lang="ts">
-import { AttachmentList, SavedRepliesSelectorModal } from "@/components";
+import {
+  AttachmentList,
+  InsertArticleModal,
+  SavedRepliesSelectorModal,
+} from "@/components";
+import { useConfigStore } from "@/stores/config";
 import { buildEditorExtensions, fullToolbar } from "@/components/editor/config";
 import EmailMultiSelect from "@/components/EmailMultiSelect.vue";
 import { createDialog } from "@/components/dialogs";
@@ -399,6 +416,19 @@ async function removeAttachment(attachment) {
 
 const showSavedRepliesSelectorModal = ref(false);
 const savedReplyActionsRef = ref<InstanceType<typeof SavedReplyActions>>();
+const showInsertArticleModal = ref(false);
+const configStore = useConfigStore();
+
+function insertArticleLink(article: { id: string; title: string }) {
+  const textEditor = editor.value;
+  if (!textEditor) return;
+  const href = configStore.articleUrl(article.id);
+  textEditor
+    .chain()
+    .focus()
+    .insertContent(`<a href="${href}">${article.title}</a> `)
+    .run();
+}
 
 /** A reply is only replaced when another one is already applied. */
 function applySavedReplies(reply: RenderedSavedReply) {
@@ -473,7 +503,9 @@ const sendMail = createResource({
   debounce: 300,
 });
 
-const label = computed(() => (sendMail.loading ? "Sending..." : props.label));
+const label = computed(() =>
+  sendMail.loading ? __("Sending...") : props.label
+);
 
 const isDisabled = computed(
   () =>

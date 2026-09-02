@@ -39,6 +39,17 @@ export const useConfigStore = defineStore("config", () => {
   const showCustomerPortalPermissionNotice = computed(
     () => !!parseInt(config.value.show_customer_portal_permission_notice)
   );
+  // Customer portal origin (help.example.com): links handed to customers must
+  // use it, not the host the agent happens to work on.
+  const helpdeskUrl = computed(
+    () => config.value.helpdesk_url || window.location.origin
+  );
+  function portalUrl(path: string) {
+    return `${helpdeskUrl.value}${path.startsWith("/") ? "" : "/"}${path}`;
+  }
+  function articleUrl(articleId: string) {
+    return portalUrl(`/helpdesk/kb-public/articles/${articleId}`);
+  }
 
   $socket.on("helpdesk:settings-updated", () => configResource.reload());
 
@@ -56,5 +67,8 @@ export const useConfigStore = defineStore("config", () => {
     disableGlobalScopeForSavedReplies,
     enableCommentReactions,
     showCustomerPortalPermissionNotice,
+    helpdeskUrl,
+    portalUrl,
+    articleUrl,
   };
 });
