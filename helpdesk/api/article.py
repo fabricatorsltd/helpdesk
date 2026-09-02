@@ -86,11 +86,17 @@ def _filter_visible_articles(items: list, language: str | None) -> list:
     names = [n for n in (_article_name(i) for i in items) if n]
     if not names:
         return items
+    from helpdesk.api.knowledge_base import language_or_filters
+
     filters = {"name": ["in", names], "status": "Published"}
-    if language and frappe.db.has_column("HD Article", "fab_language"):
-        filters["fab_language"] = language
     visible = set(
-        frappe.get_list("HD Article", filters=filters, pluck="name", limit_page_length=0)
+        frappe.get_list(
+            "HD Article",
+            filters=filters,
+            or_filters=language_or_filters(language),
+            pluck="name",
+            limit_page_length=0,
+        )
     )
     return [i for i in items if _article_name(i) in visible]
 
