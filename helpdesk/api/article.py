@@ -76,7 +76,8 @@ def _article_name(item) -> str | None:
     if not name:
         raw = getattr(item, "id", "") or ""
         name = raw.split(":", 1)[-1] if ":" in raw else None
-    return name
+    # search hits carry the heading anchor after the name ("<name>#<heading>")
+    return name.split("#", 1)[0] if name else None
 
 
 def _filter_visible_articles(items: list, language: str | None) -> list:
