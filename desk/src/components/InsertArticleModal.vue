@@ -14,11 +14,11 @@
           </template>
         </TextInput>
         <div
-          v-if="articles.data?.length"
+          v-if="results.length"
           class="flex max-h-80 flex-col gap-1 overflow-y-auto"
         >
           <button
-            v-for="a in articles.data"
+            v-for="a in results"
             :key="a.name"
             class="flex flex-col items-start gap-0.5 rounded px-2 py-1.5 text-left hover:bg-surface-gray-2"
             @click="select(a)"
@@ -66,6 +66,16 @@ const show = computed({
 const query = ref("");
 // agents search across every language: the customer's language is theirs to judge
 const articles = createResource({ url: "helpdesk.api.article.search", auto: false });
+// one hit per heading comes back: keep the first per article
+const results = computed<Article[]>(() => {
+  const seen = new Set<string>();
+  return (articles.data || []).filter((a: Article) => {
+    const id = a.name.split("#")[0];
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+});
 
 watch(query, (value) => {
   if (value.length < 3) return;
