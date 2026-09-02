@@ -308,6 +308,7 @@ import CategoryModal from "@/components/knowledge-base/CategoryModal.vue";
 import MoveToCategoryModal from "@/components/knowledge-base/MoveToCategoryModal.vue";
 import { useScreenSize } from "@/composables/screen";
 import { useAuthStore } from "@/stores/auth";
+import { useConfigStore } from "@/stores/config";
 import {
   deleteRes as deleteArticle,
   incrementView,
@@ -397,6 +398,7 @@ const category = reactive({
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 
 const editorRef = ref(null);
 const editable = ref(route.query.isEdit ?? false);
@@ -755,9 +757,10 @@ const articleActions = computed(() => [
     label: __("Share"),
     icon: "lucide-link",
     onClick: () => {
-      const url = new URL(window.location.href);
-      url.pathname = `/helpdesk/kb-public/articles/${props.articleId}`;
-      copyToClipboard(url.toString(), __("Article link copied to clipboard"));
+      copyToClipboard(
+        configStore.articleUrl(props.articleId),
+        __("Article link copied to clipboard")
+      );
     },
   },
   {

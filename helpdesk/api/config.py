@@ -24,4 +24,15 @@ def get_config():
         or frappe.db.get_single_value("Website Settings", "favicon")
         or "/assets/helpdesk/desk/favicon.svg"
     )
+    res.helpdesk_url = get_helpdesk_url()
     return res
+
+
+def get_helpdesk_url() -> str:
+    """Public origin of the customer portal (agents work on the ERP host, the
+    links they share must point customers to the portal host)."""
+    url = ""
+    if frappe.get_meta("HD Settings").has_field("helpdesk_url"):
+        url = frappe.db.get_single_value("HD Settings", "helpdesk_url") or ""
+    url = (url or frappe.conf.get("helpdesk_host") or "").strip()
+    return url.rstrip("/")

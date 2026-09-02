@@ -19,6 +19,7 @@ export { default as NestedPopover } from "./NestedPopover.vue";
 export { default as Notifications } from "./notifications/Notifications.vue";
 export { default as PageTitle } from "./PageTitle.vue";
 export { default as SavedRepliesSelectorModal } from "./SavedRepliesSelectorModal.vue";
+export { default as InsertArticleModal } from "./InsertArticleModal.vue";
 export { default as SearchComplete } from "./SearchComplete.vue";
 export { default as Section } from "./Section.vue";
 export { default as StarRating } from "./StarRating.vue";

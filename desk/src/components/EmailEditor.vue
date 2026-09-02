@@ -182,6 +182,13 @@
               >
                 <SavedReplyIcon class="h-4 w-4" />
               </button>
+              <button
+                class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
+                :title="__('Insert article')"
+                @click="showInsertArticleModal = true"
+              >
+                <LucideBookOpen class="h-4 w-4" />
+              </button>
               <div class="h-4 w-[2px] border-s ml-1" />
             </div>
             <EditorFixedMenu :items="fullToolbar" />
@@ -204,6 +211,10 @@
       </div>
     </template>
   </Editor>
+  <InsertArticleModal
+    v-model="showInsertArticleModal"
+    @select="insertArticleLink"
+  />
   <SavedRepliesSelectorModal
     v-model="showSavedRepliesSelectorModal"
     :doctype="doctype"
@@ -213,7 +224,8 @@
 </template>
 
 <script setup lang="ts">
-import { AttachmentItem, SavedRepliesSelectorModal } from "@/components";
+import { AttachmentItem, InsertArticleModal, SavedRepliesSelectorModal } from "@/components";
+import { useConfigStore } from "@/stores/config";
 import { buildEditorExtensions, fullToolbar } from "@/components/editor/config";
 import EmailMultiSelect from "@/components/EmailMultiSelect.vue";
 import { AttachmentIcon } from "@/components/icons";
@@ -385,6 +397,19 @@ async function removeAttachment(attachment) {
 }
 
 const showSavedRepliesSelectorModal = ref(false);
+const showInsertArticleModal = ref(false);
+const configStore = useConfigStore();
+
+function insertArticleLink(article: { id: string; title: string }) {
+  const textEditor = editor.value;
+  if (!textEditor) return;
+  const href = configStore.articleUrl(article.id);
+  textEditor
+    .chain()
+    .focus()
+    .insertContent(`<a href="${href}">${article.title}</a> `)
+    .run();
+}
 
 function applySavedReplies(template: string) {
   const textEditor = editorRef.value?.editor;
