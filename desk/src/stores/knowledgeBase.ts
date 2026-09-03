@@ -8,13 +8,26 @@ export const kbLanguage = ref<string>("");
 // Title
 export const newArticle = createResource({
   url: "frappe.client.insert",
-  makeParams({ title, content, category }) {
+  makeParams({
+    title,
+    content,
+    category,
+    fabVisibility,
+    fabLanguage,
+    fabCustomers,
+  }) {
     return {
       doc: {
         doctype: "HD Article",
         title,
         content,
         category,
+        fab_visibility: fabVisibility || "Public",
+        fab_language: fabLanguage || null,
+        fab_customers:
+          fabVisibility === "Restricted"
+            ? (fabCustomers || []).map((c: string) => ({ customer: c }))
+            : [],
       },
     };
   },
