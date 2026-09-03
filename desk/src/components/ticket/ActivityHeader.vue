@@ -6,7 +6,7 @@
       {{ title }}
     </div>
     <Dropdown
-      v-if="title == 'Calls'"
+      v-if="tabName == 'call'"
       :options="callActions"
       @click.stop
       placement="right"
@@ -43,6 +43,11 @@ import { Dropdown } from "frappe-ui";
 import { computed, h, inject, ref } from "vue";
 defineProps({
   title: {
+    type: String,
+    required: true,
+  },
+  // Untranslated tab identifier, see TicketAgentActivities.
+  tabName: {
     type: String,
     required: true,
   },

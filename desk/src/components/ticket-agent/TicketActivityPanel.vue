@@ -12,6 +12,7 @@
         ref="ticketAgentActivitiesRef"
         :activities="filterActivities(tab.name as TicketTab)"
         :title="tab.label"
+        :tab-name="tab.name"
         :ticket-status="ticket.doc.status"
         @email:reply="
           (e) => {
@@ -60,6 +61,7 @@ import TicketAnalyticsTab from "@/components/ticket-agent/analytics/TicketAnalyt
 import LucideChartNoAxesColumn from "~icons/lucide/chart-no-axes-column";
 import { useActiveTabManager } from "@/composables/useActiveTabManager";
 import { useTelephonyStore } from "@/stores/telephony";
+import { __ } from "@/translation";
 import { ActivitiesSymbol, TabObject, TicketSymbol, TicketTab } from "@/types";
 import { Button, Tabs } from "frappe-ui";
 import { storeToRefs } from "pinia";
@@ -82,17 +84,17 @@ const tabs: ComputedRef<TabObject[]> = computed(() => {
   const _tabs: TabObject[] = [
     {
       name: "activity",
-      label: "Activity",
+      label: __("Activity"),
       icon: ActivityIcon,
     },
     {
       name: "email",
-      label: "Emails",
+      label: __("Emails"),
       icon: EmailIcon,
     },
     {
       name: "comment",
-      label: "Comments",
+      label: __("Comments"),
       icon: CommentIcon,
     },
   ];
@@ -100,7 +102,7 @@ const tabs: ComputedRef<TabObject[]> = computed(() => {
   if (isCallingEnabled.value) {
     _tabs.push({
       name: "call",
-      label: "Calls",
+      label: __("Calls"),
       icon: PhoneIcon,
     });
   }
@@ -158,12 +160,11 @@ const _activities = computed(() => {
   });
 
   activities.value.data.history.map((h) => {
-    // }
-    h.action;
-    h.owner;
-    // if h.actions includes h.owner, replace it with 'themselves'
-    if (h.action && h.owner && h.action.includes(h.owner)) {
-      h.action = h.action.replace(h.owner, "themselves");
+    // the backend sends a translated `label`; `action` stays English for logic
+    h.label = h.label || h.action;
+    // if the label includes h.owner, replace it with 'themselves'
+    if (h.label && h.owner && h.label.includes(h.owner)) {
+      h.label = h.label.replace(h.owner, __("themselves"));
     }
     return h;
   });
@@ -175,7 +176,8 @@ const _activities = computed(() => {
     return {
       type: "history",
       key: h.creation,
-      content: h.action ? h.action : "viewed this",
+      content: h.label ? h.label : __("viewed this"),
+      rawContent: h.action ? h.action : "viewed this",
       creation: h.creation,
       user: h.user.name + " ",
     };
@@ -188,9 +190,11 @@ const _activities = computed(() => {
       name: call.name,
       key: call.creation,
       call_type: call.type,
-      content: `${call.caller || "Unknown"} made a call to ${
-        call.receiver || "Unknown"
-      }`,
+      content: __(
+        "{0} made a call to {1}",
+        call.caller || __("Unknown"),
+        call.receiver || __("Unknown")
+      ),
       duration: call.duration ? call.duration + "s" : "0s",
     };
   });
@@ -211,13 +215,15 @@ const _activities = computed(() => {
       currentActivity.relatedActivities = [currentActivity];
       for (let j = i + 1; j < sorted.length + 1; j++) {
         const nextActivity = sorted[j];
+        // grouping runs on the untranslated action, never on the displayed label
+        const nextContent = nextActivity?.rawContent ?? nextActivity?.content;
 
         if (
           nextActivity &&
           nextActivity.user === currentActivity.user &&
-          nextActivity.content !== "viewed this" &&
-          !nextActivity.content.includes("assigned") &&
-          !nextActivity.content.includes("unassigned")
+          nextContent !== "viewed this" &&
+          !nextContent.includes("assigned") &&
+          !nextContent.includes("unassigned")
         ) {
           currentActivity.relatedActivities.push(nextActivity);
         } else {
