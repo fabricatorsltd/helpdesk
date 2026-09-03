@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 
 import frappe
@@ -234,6 +235,67 @@ def get_comments(ticket: str):
     return comments
 
 
+# field word logged by hd_ticket.handle_ticket_activity -> (set message, cleared
+# message). One message per field, so each language can pick its own article.
+ACTIVITY_FIELD_MESSAGES = {
+    "status": ("set status to {0}", "cleared status"),
+    "priority": ("set priority to {0}", "cleared priority"),
+    "team": ("set team to {0}", "cleared team"),
+    "type": ("set type to {0}", "cleared type"),
+    "contact": ("set contact to {0}", "cleared contact"),
+    "SLA": ("set SLA to {0}", "cleared SLA"),
+}
+ACTIVITY_FIELDS = "|".join(ACTIVITY_FIELD_MESSAGES)
+
+
+def translate_activity(action: str) -> str:
+    """Rebuild a stored activity action in the session language.
+
+    Actions are written in English at event time (see log_ticket_activity), so
+    the known shapes are parsed back into their parts and reassembled from
+    translatable strings. Unknown shapes are returned as they are.
+    """
+    if not action:
+        return action
+
+    match = re.fullmatch(rf"set ({ACTIVITY_FIELDS}) to (.+)", action)
+    if match:
+        field, value = match.groups()
+        # statuses are translatable, the other values are user data
+        return _(ACTIVITY_FIELD_MESSAGES[field][0]).format(
+            _(value) if field == "status" else value
+        )
+
+    match = re.fullmatch(rf"cleared ({ACTIVITY_FIELDS})", action)
+    if match:
+        return _(ACTIVITY_FIELD_MESSAGES[match.group(1)][1])
+
+    match = re.fullmatch(r"split the ticket from #(.+)", action)
+    if match:
+        return _("split the ticket from #{0}").format(match.group(1))
+
+    match = re.fullmatch(
+        r"automatically closed the ticket after (\d+) days? of inactivity", action
+    )
+    if match:
+        return _("automatically closed the ticket after {0} days of inactivity").format(
+            match.group(1)
+        )
+
+    parts = []
+    for part in action.split(" & "):
+        match = re.fullmatch(r"(assigned|unassigned) (.+)", part)
+        if not match:
+            return action
+        verb, users = match.groups()
+        parts.append(
+            (_("assigned {0}") if verb == "assigned" else _("unassigned {0}")).format(
+                users
+            )
+        )
+    return " & ".join(parts)
+
+
 def get_history(ticket: str):
     if not frappe.has_permission("HD Ticket Activity", "read"):
         return []
@@ -249,6 +311,7 @@ def get_history(ticket: str):
     history = history.run(as_dict=True)
     for h in history:
         h.user = get_user_info_for_avatar(h.owner)
+        h.label = translate_activity(h.action)
     return history
 
 

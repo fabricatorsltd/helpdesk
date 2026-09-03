@@ -46,7 +46,7 @@
   <ListView
     v-else-if="list.data?.data.length > 0"
     class="flex-1"
-    :columns="columns"
+    :columns="displayColumns"
     :rows="rows"
     row-key="name"
     :options="{
@@ -63,7 +63,7 @@
   >
     <ListHeader class="sm:mx-5 mx-3">
       <ListHeaderItem
-        v-for="column in columns"
+        v-for="column in displayColumns"
         :key="column.key"
         :item="column"
         @columnWidthUpdated="handleColumnResize"
@@ -429,6 +429,15 @@ const rows = computed(() => {
 });
 const columns = ref([]);
 
+// Labels are stored (and saved back to the view) in English, so they are
+// translated on a copy used only for rendering.
+const displayColumns = computed(() =>
+  columns.value.map((column) => ({
+    ...column,
+    label: column.label ? __(column.label) : column.label,
+  }))
+);
+
 function getGroupedByRows(listRows, groupByField) {
   let groupedRows = [];
   groupByField.options?.forEach((option) => {
@@ -484,9 +493,9 @@ const filterableFields = createResource({
   transform: (data) => {
     data = data.map((field) => {
       return {
-        label: field.label,
         value: field.fieldname,
         ...field,
+        label: field.label ? __(field.label) : field.label,
       };
     });
     return data;
@@ -500,6 +509,11 @@ const sortableFields = createResource({
     doctype: options.value.doctype,
     show_customer_portal_fields: defaultParams.show_customer_portal_fields,
   },
+  transform: (data) =>
+    data.map((field) => ({
+      ...field,
+      label: field.label ? __(field.label) : field.label,
+    })),
 });
 
 const quickFilters = createResource({
@@ -564,7 +578,7 @@ function handleFieldClick(e: MouseEvent, column, row, item) {
   e.stopPropagation();
   e.preventDefault();
 
-  if (column.label == "Status" && options.value.doctype === "HD Ticket") {
+  if (column.key === "status" && options.value.doctype === "HD Ticket") {
     item = getStatus(item)?.label_agent;
   }
 

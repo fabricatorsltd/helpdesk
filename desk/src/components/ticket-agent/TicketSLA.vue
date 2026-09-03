@@ -112,7 +112,7 @@ const firstResponse = computed(() => {
   ) {
     let responseBy = formatTimeShort(ticket.value.doc.response_by as string);
     return {
-      label: `Due in ${responseBy}`,
+      label: __("Due in {0}", [responseBy]),
       color: "orange",
     };
   } else if (
@@ -136,7 +136,7 @@ const firstResponse = computed(() => {
             ticket.value.doc.creation
           );
     return {
-      label: `Fulfilled in ${fulfilled}`,
+      label: __("Fulfilled in {0}", [fulfilled]),
       color: "green",
     };
   } else {
@@ -146,7 +146,7 @@ const firstResponse = computed(() => {
         ticket.value.doc.response_by as string
       );
       return {
-        label: `Overdue by ${responseBy}`,
+        label: __("Overdue by {0}", [responseBy]),
         color: "red",
         date: ticket.value.doc.response_by,
       };
@@ -159,7 +159,7 @@ const firstResponse = computed(() => {
           ticket.value.doc.response_by
         );
     return {
-      label: `Failed by ${failed}`,
+      label: __("Failed by {0}", [failed]),
       color: "red",
     };
   }
@@ -176,7 +176,7 @@ const resolutionBy = computed(() => {
     )
   ) {
     return {
-      label: `On Hold`,
+      label: __("On Hold"),
       color: "blue",
     };
   } else if (
@@ -189,7 +189,7 @@ const resolutionBy = computed(() => {
     );
 
     return {
-      label: `Overdue by ${overdue}`,
+      label: __("Overdue by {0}", [overdue]),
       color: "red",
       date: ticket.value.doc?.resolution_by,
     };
@@ -201,7 +201,7 @@ const resolutionBy = computed(() => {
       ticket.value.doc?.resolution_by as string
     );
     return {
-      label: `Due in ${resolutionBy}`,
+      label: __("Due in {0}", [resolutionBy]),
       color: "purple",
     };
   } else if (
@@ -225,7 +225,7 @@ const resolutionBy = computed(() => {
             ticket.value.doc?.creation
           );
     return {
-      label: `Fulfilled in ${fulfilled}`,
+      label: __("Fulfilled in {0}", [fulfilled]),
       color: "green",
     };
   } else {
@@ -236,7 +236,7 @@ const resolutionBy = computed(() => {
           ticket.value.doc?.resolution_date
         );
     return {
-      label: `Failed by ${failed}`,
+      label: __("Failed by {0}", [failed]),
       color: "red",
     };
   }

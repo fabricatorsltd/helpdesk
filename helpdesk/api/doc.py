@@ -412,7 +412,7 @@ def get_quick_filters(doctype: str, show_customer_portal_fields: bool = False):
     meta = frappe.get_meta(doctype)
     fields = [field for field in meta.fields if field.in_standard_filter]
     quick_filters = []
-    name_filter = {"label": "ID", "name": "name", "type": "Data"}
+    name_filter = {"label": _("ID"), "name": "name", "type": "Data"}
     if doctype == "Contact":
         quick_filters.append(name_filter)
         return quick_filters
