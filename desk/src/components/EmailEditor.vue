@@ -194,7 +194,7 @@
             <EditorFixedMenu :items="fullToolbar" />
           </div>
           <div class="flex items-center justify-end gap-x-2 sm:mt-0 w-[40%]">
-            <Button label="Discard" @click="handleDiscard" />
+            <Button :label="__('Discard')" @click="handleDiscard" />
             <Button
               variant="solid"
               :disabled="isDisabled"
@@ -232,6 +232,7 @@ import { AttachmentIcon } from "@/components/icons";
 import { useTyping } from "@/composables/realtime";
 import { getUserEmailInfo } from "@/composables/useUserEmailInfo";
 import { useAuthStore } from "@/stores/auth";
+import { __ } from "@/translation";
 import {
   getFontFamily,
   htmlToText,
@@ -447,7 +448,9 @@ const sendMail = createResource({
   debounce: 300,
 });
 
-const label = computed(() => (sendMail.loading ? "Sending..." : props.label));
+const label = computed(() =>
+  sendMail.loading ? __("Sending...") : props.label
+);
 
 const isDisabled = computed(
   () =>

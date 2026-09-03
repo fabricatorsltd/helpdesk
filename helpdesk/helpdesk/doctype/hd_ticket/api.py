@@ -18,7 +18,11 @@ from pypika import Criterion, Order
 from helpdesk.api.doc import handle_at_me_support
 from helpdesk.consts import DEFAULT_TICKET_TEMPLATE
 from helpdesk.helpdesk.doctype.hd_form_script.hd_form_script import get_form_script
-from helpdesk.helpdesk.doctype.hd_settings.helpers import get_rendered_banner_msg
+from helpdesk.helpdesk.doctype.hd_settings.helpers import (
+    get_rendered_banner_msg,
+    resolve_ticket_language,
+    use_language,
+)
 from helpdesk.helpdesk.doctype.hd_ticket_template.api import get_fields_meta
 from helpdesk.helpdesk.doctype.hd_ticket_template.api import get_one as get_template
 from helpdesk.utils import (
@@ -441,9 +445,10 @@ def merge_ticket(source: str, target: str):
     doc.merged_with = target
     doc.save()
 
-    message = _(
-        "This ticket (#{0}) has been merged with ticket <a href = '/helpdesk/tickets/{1}'>#{1}</a>."
-    ).format(source, target)
+    with use_language(resolve_ticket_language(doc)):
+        message = _(
+            "This ticket (#{0}) has been merged with ticket <a href = '/helpdesk/tickets/{1}'>#{1}</a>."
+        ).format(source, target)
     controller.reply_via_agent(
         doc,
         message=message,
@@ -455,9 +460,9 @@ def merge_ticket(source: str, target: str):
     c.reference_ticket = target
     source_link = get_helpdesk_url("/helpdesk/tickets/" + str(source))
     target_link = get_helpdesk_url("/helpdesk/tickets/" + str(target))
-    c.content = _(
-        f"Ticket <a href={source_link}> #{source}</a>  has been merged with ticket #{target}."
-    )
+    # Stored in English with a stable shape: CommentBox.vue detects it and
+    # renders it in the reader's language.
+    c.content = f"Ticket <a href={source_link}> #{source}</a>  has been merged with ticket #{target}."
     c.save()
 
 
