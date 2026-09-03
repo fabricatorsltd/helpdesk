@@ -417,7 +417,9 @@ class HDTicket(Document):
         if self.is_new() or is_agent() or not self.via_customer_portal:
             return
         old_doc = self.get_doc_before_save()
-        is_closed = old_doc.status == "Closed"
+        # merged tickets used to land in Closed and were locked by that; they now
+        # carry their own status, so the lock reads the merge flag instead
+        is_closed = old_doc.status == "Closed" or bool(old_doc.is_merged)
         is_rated = bool(old_doc.feedback)
         if is_closed or is_rated:
             text = _("Closed or rated tickets cannot be updated by non-agents")
@@ -713,6 +715,15 @@ class HDTicket(Document):
             frappe.throw(
                 _("You are not permitted to reply as an agent"), frappe.PermissionError
             )
+        # A merged ticket is a dead thread: the conversation continues on the
+        # target, and its requester was told so. The merge notice is the only
+        # reply that still leaves from here (see merge_ticket).
+        if self.is_merged and self.merged_with and not self.flags.replying_about_merge:
+            frappe.throw(
+                _("This ticket was merged into #{0}, reply from there.").format(
+                    self.merged_with
+                )
+            )
         skip_email_workflow = self.skip_email_workflow()
         medium = "" if skip_email_workflow else "Email"
         # keep the ticket id in the subject as a stable tracking tag so replies
@@ -849,7 +860,9 @@ class HDTicket(Document):
         # take the same path (see notify_agents_new_reply).
 
         # if self.status_category == "Paused" and not new_ticket:
-        if not new_ticket:
+        # A merged ticket keeps its status: the reply is redirected to the merge
+        # target from on_communication_update.
+        if not new_ticket and not self.is_merged:
             self.status = self.ticket_reopen_status
             self.save(ignore_permissions=True)
 
@@ -1247,10 +1260,13 @@ class HDTicket(Document):
         if c.sent_or_received == "Received":
             # check if agent has replied
 
-            if self.has_agent_replied:
-                self.status = self.ticket_reopen_status
-            else:
-                self.status = self.default_open_status
+            # A merged ticket stays merged: if the redirect above found no safe
+            # target the reply is kept here, but it must not resurrect the ticket.
+            if not self.is_merged:
+                if self.has_agent_replied:
+                    self.status = self.ticket_reopen_status
+                else:
+                    self.status = self.default_open_status
             # if received that means customer has replied
             self.last_customer_response = frappe.utils.now_datetime()
             # Notify agents of the reply, on any channel (email-in and portal
@@ -1268,7 +1284,9 @@ class HDTicket(Document):
             self.last_agent_response = frappe.utils.now_datetime()
 
             # TODO: remove this feature once we add automation feature
-            if frappe.db.get_single_value("HD Settings", "auto_update_status"):
+            if not self.is_merged and frappe.db.get_single_value(
+                "HD Settings", "auto_update_status"
+            ):
                 self.status = frappe.db.get_single_value(
                     "HD Settings", "update_status_to"
                 )

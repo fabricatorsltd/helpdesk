@@ -146,8 +146,9 @@ const showSubjectDialog = ref(false);
 
 const { notifyTicketUpdate } = useNotifyTicketUpdate(ticket.value?.name);
 const statusDropdown = computed(() => {
-  const statuses =
-    ticketStatusStore.statuses.data?.filter((s) => s.enabled) || [];
+  const statuses = ticketStatusStore
+    .selectableStatuses()
+    .filter((s) => s.enabled);
   return statuses.map((o: HDTicketStatus) => ({
     label: __(o.label_agent),
     value: o.label_agent,

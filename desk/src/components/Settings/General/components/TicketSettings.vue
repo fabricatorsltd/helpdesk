@@ -276,7 +276,7 @@ import { computed, inject } from "vue";
 
 const settingsData = inject(HDSettingsSymbol);
 
-const { statuses } = useTicketStatusStore();
+const { selectableStatuses } = useTicketStatusStore();
 
 const bannerMsg = createResource({
   url: "helpdesk.helpdesk.doctype.hd_settings.helpers.get_banner_msg",
@@ -322,7 +322,7 @@ const ticketTypeList = createListResource({
 
 const autoUpdateTicketStatusList = computed(() => {
   return (
-    statuses.data?.map((s: HDTicketStatus) => {
+    selectableStatuses().map((s: HDTicketStatus) => {
       return {
         label: s.label_agent,
         value: s.label_agent,
@@ -333,8 +333,8 @@ const autoUpdateTicketStatusList = computed(() => {
 
 const autoCloseTicketStatusList = computed(() => {
   return (
-    statuses.data
-      ?.filter(
+    selectableStatuses()
+      .filter(
         (s: HDTicketStatus) =>
           s.category === "Resolved" || s.category === "Paused"
       )

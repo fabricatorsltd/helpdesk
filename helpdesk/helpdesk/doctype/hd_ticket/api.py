@@ -440,7 +440,12 @@ def merge_ticket(source: str, target: str):
 
     doc = frappe.get_doc("HD Ticket", source)
 
-    doc.status = "Closed"
+    # A merge is not a closure: give it its own status where the site has the
+    # record, so lists and pickers can tell the two apart. Sites without it
+    # (upstream, or before fab_helpdesk migrates) keep the old behaviour.
+    doc.status = (
+        "Merged" if frappe.db.exists("HD Ticket Status", "Merged") else "Closed"
+    )
     doc.is_merged = 1
     doc.merged_with = target
     doc.save()
@@ -449,6 +454,8 @@ def merge_ticket(source: str, target: str):
         message = _(
             "This ticket (#{0}) has been merged with ticket <a href = '/helpdesk/tickets/{1}'>#{1}</a>."
         ).format(source, target)
+    # the one reply still allowed out of a merged ticket: the notice itself
+    doc.flags.replying_about_merge = True
     controller.reply_via_agent(
         doc,
         message=message,

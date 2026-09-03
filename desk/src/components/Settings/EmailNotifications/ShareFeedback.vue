@@ -49,9 +49,9 @@ const content = ref("");
 const defaultContent = ref("");
 const enabled = ref(false);
 const compRef = ref<InstanceType<typeof Notification>>();
-const { statuses } = useTicketStatusStore();
+const { selectableStatuses } = useTicketStatusStore();
 const statusOptions = computed<Record<"label" | "value", string>[]>(() =>
-  statuses.data
+  selectableStatuses()
     .filter((s) => s.category === "Resolved")
     .map((s) => ({
       label: __(s.label_agent),
