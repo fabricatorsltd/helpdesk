@@ -43,7 +43,7 @@
     >
       <Editor
         :key="editable ? 'edit' : 'view'"
-        v-model="_content"
+        v-model="displayContent"
         :extensions="extensions"
         :editable="editable"
         :upload-function="(file:any) => uploadFunction(file, 'HD Ticket', ticketId)"
@@ -62,7 +62,11 @@
         <div>
           <Button
             :label="
-              isMobileView ? 'Save' : isMac ? 'Save (⌘ + ⏎)' : 'Save (Ctrl + ⏎)'
+              isMobileView
+                ? __('Save')
+                : isMac
+                ? __('Save') + ' (⌘ + ⏎)'
+                : __('Save') + ' (Ctrl + ⏎)'
             "
             @click="handleSaveComment"
             variant="solid"
@@ -212,11 +216,30 @@ const isConfirmingDelete = ref(false);
 const editable = ref(false);
 const _content = ref(content);
 
+// Merge comments are stored in English (see hd_ticket/api.py merge_ticket), so
+// they are translated here, keeping the link to the source ticket.
+function translateMergedComment(html: string): string {
+  const link = html.match(/<a\s[^>]*>.*?<\/a>/)?.[0];
+  const target = html.match(/has been merged with ticket #(\d+)/)?.[1];
+  if (!link || !target) {
+    return html;
+  }
+  return __("Ticket {0} has been merged with ticket #{1}.", link, target);
+}
+
+const displayContent = computed({
+  get: () =>
+    isTicketMergedComment.value
+      ? translateMergedComment(_content.value)
+      : _content.value,
+  set: (value: string) => (_content.value = value),
+});
+
 const emojiList = ["👍", "👎", "❤️", "🎉", "👀", "✅"];
 
 const dropdownOptions = computed(() => [
   {
-    label: "Edit",
+    label: __("Edit"),
     onClick: () => handleEditMode(),
     icon: "lucide-edit-2",
     condition: () => !isTicketMergedComment.value,

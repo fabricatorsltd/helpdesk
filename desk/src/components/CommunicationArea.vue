@@ -7,7 +7,7 @@
         <Button
           ref="sendEmailRef"
           variant="ghost"
-          label="Reply"
+          :label="__('Reply')"
           :class="[
             showEmailBox ? '!bg-surface-gray-4 hover:!bg-surface-gray-3' : '',
           ]"
@@ -19,7 +19,7 @@
         </Button>
         <Button
           variant="ghost"
-          label="Comment"
+          :label="__('Add comment')"
           :class="[
             showCommentBox ? '!bg-surface-gray-4 hover:!bg-surface-gray-3' : '',
           ]"
@@ -44,9 +44,13 @@
           <EmailEditor
             ref="emailEditorRef"
             :label="
-              isMobileView ? 'Send' : isMac ? 'Send (⌘ + ⏎)' : 'Send (Ctrl + ⏎)'
+              isMobileView
+                ? __('Send')
+                : isMac
+                ? __('Send') + ' (⌘ + ⏎)'
+                : __('Send') + ' (Ctrl + ⏎)'
             "
-            placeholder="Hi John, we are looking into this issue."
+            :placeholder="__('Hi John, we are looking into this issue.')"
             :ticketId="ticketId"
             :to-emails="toEmails"
             :cc-emails="ccEmails"
@@ -79,15 +83,15 @@
             ref="commentTextEditorRef"
             :label="
               isMobileView
-                ? 'Comment'
+                ? __('Add comment')
                 : isMac
-                ? 'Comment (⌘ + ⏎)'
-                : 'Comment (Ctrl + ⏎)'
+                ? __('Add comment') + ' (⌘ + ⏎)'
+                : __('Add comment') + ' (Ctrl + ⏎)'
             "
             :ticketId="ticketId"
             :editable="showCommentBox"
             :doctype="doctype"
-            placeholder="@John could you please look into this?"
+            :placeholder="__('@John could you please look into this?')"
             @submit="
               () => {
                 showCommentBox = false;
