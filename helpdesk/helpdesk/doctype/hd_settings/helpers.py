@@ -63,11 +63,14 @@ def use_language(lang: str | None):
 def get_default_email_content(type: str) -> str:
     if type == "share_feedback":
         return """\
-<p>Hello,</p>
-<p>Thanks for reaching out to us. We’d love your feedback on your recent support experience with ticket #{{ doc.name }}.</p>
-<a href="{{ url }}" class="btn btn-primary">Share Feedback</a>
-
-<p>Thank you!<br>Support Team</p>"""
+<p>{{ _("Your request has been closed. How did we do?") }}</p>
+<p style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">
+  <strong>{{ _("Request no.") }} {{ doc.name }}</strong><br>
+  {{ doc.subject }}
+</p>
+<p style="margin:20px 0;"><a href="{{ url }}" style="display:inline-block;padding:10px 18px;background:#171717;border-radius:6px;color:#ffffff;font-weight:600;text-decoration:none;">{{ _("Rate the support you received") }}</a></p>
+<p style="color:#8d95a0;">{{ _("It takes less than a minute. Thank you.") }}</p>
+"""
 
     if type == "acknowledgement":
         return """\
