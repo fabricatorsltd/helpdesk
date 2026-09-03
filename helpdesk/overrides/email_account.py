@@ -1,5 +1,6 @@
 import re
 from email import message_from_string
+from email.utils import getaddresses
 
 import frappe
 from frappe import _
@@ -54,6 +55,66 @@ class CustomInboundMail(InboundMail):
 
         self._parent_communication = ""
         return self._parent_communication
+
+    def reference_document(self):
+        # Respect cached result from any prior call on this instance
+        if self._reference_document is not None:
+            return self._reference_document
+
+        reference_document = super().reference_document()
+        if reference_document:
+            return reference_document
+
+        # Frappe only falls back to subject matching when the doctype sits on the
+        # Email Account. With IMAP folders it sits on the folder row and reaches us
+        # as self.append_to, so a reply carrying "(#0026)" but no usable In-Reply-To
+        # opened a second ticket. Recover the thread from the subject, but only for
+        # senders already entitled to it.
+        if self.append_to == "HD Ticket" and not self.email_account.append_to:
+            ticket = self.ticket_from_subject()
+            if ticket:
+                self._reference_document = ticket
+                return self._reference_document
+
+        self._reference_document = ""
+        return self._reference_document
+
+    def ticket_from_subject(self):
+        """Ticket named in the subject tag, if the sender may write to it."""
+        name = self.get_reference_name_from_subject()
+        if not name or not frappe.db.exists("HD Ticket", name):
+            return None
+
+        ticket = self.get_doc("HD Ticket", name, ignore_error=True)
+        if not ticket or not self.sender_belongs_to_ticket(ticket):
+            return None
+
+        return ticket
+
+    def sender_belongs_to_ticket(self, ticket):
+        sender = (self.from_email or "").lower()
+        if not sender:
+            return False
+
+        allowed = {
+            addr.lower()
+            for _, addr in getaddresses([ticket.get("fab_cc") or ""])
+            if addr
+        }
+        if ticket.raised_by:
+            allowed.add(ticket.raised_by.lower())
+        if ticket.contact:
+            contact_email = frappe.db.get_value("Contact", ticket.contact, "email_id")
+            if contact_email:
+                allowed.add(contact_email.lower())
+        if sender in allowed:
+            return True
+
+        if frappe.db.exists("HD Agent", {"name": sender, "is_active": 1}):
+            return True
+
+        own = {a.lower() for a in frappe.get_all("Email Account", pluck="email_id") if a}
+        return sender in own
 
 
 class CustomEmailAccount(EmailAccount):

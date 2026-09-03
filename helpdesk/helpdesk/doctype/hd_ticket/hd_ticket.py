@@ -192,8 +192,10 @@ class HDTicket(Document):
 
         # Notify agents of every new ticket, including portal-created ones. Upstream
         # only notified on email tickets, so tickets opened from the customer portal
-        # went unseen until someone happened to look at the queue.
-        if not frappe.flags.initial_sync:
+        # went unseen until someone happened to look at the queue. Email tickets are
+        # inserted with subject and sender only, the body lands later with the
+        # communication, so those are announced from on_communication_update instead.
+        if not frappe.flags.initial_sync and self.get("description"):
             self.notify_agents_new_ticket()
 
     def capture_ticket_created_telemetry_events(self):
@@ -1272,9 +1274,21 @@ class HDTicket(Document):
 
         # Fetch description from communication if not set already. This might not be needed
         # anymore as a communication is created when a ticket is created.
+        first_message = not self.description
         self.description = self.description or c.content
         # Save the ticket, allowing for hooks to run.
         self.save()
+
+        # Email tickets reach after_insert without a body, so the agent notification
+        # would show an empty message. Announce them here, once the opening mail has
+        # filled the description.
+        if (
+            first_message
+            and self.description
+            and c.sent_or_received == "Received"
+            and not frappe.flags.initial_sync
+        ):
+            self.notify_agents_new_ticket()
 
     def attach_file_with_doc(self, doctype, docname, file_url):
         if frappe.db.exists(
