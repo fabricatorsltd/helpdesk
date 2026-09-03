@@ -151,6 +151,10 @@ def edit_contact(name: str, doc: dict):
 
     if user := contact_doc.get("user"):
         user_doc = frappe.get_doc("User", user)
+        # Saving the user copies its name back onto the contact, so keep both in
+        # step or the rename is undone right here.
+        user_doc.first_name = contact_doc.first_name
+        user_doc.last_name = contact_doc.last_name
         user_doc.user_image = doc.get("image", "")
         user_doc.time_zone = doc.get("timezone", "")
         user_doc.save()
