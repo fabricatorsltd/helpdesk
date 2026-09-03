@@ -168,6 +168,7 @@
 </template>
 
 <script setup>
+import { __ } from "@/translation";
 import { computed, inject } from "vue";
 import { NestedPopover } from "frappe-ui";
 import { useSortable } from "@vueuse/integrations/useSortable";

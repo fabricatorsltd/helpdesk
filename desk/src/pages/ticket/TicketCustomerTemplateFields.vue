@@ -1,7 +1,9 @@
 <template>
   <div class="space-y-2 px-6 py-3.5 border-b">
     <div class="flex items-center gap-4">
-      <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">Status</span>
+      <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">{{
+        __("Status")
+      }}</span>
       <span
         class="flex-1 truncate rounded border border-outline-gray-2 bg-surface-base px-2 py-1 text-p-sm text-ink-gray-9"
       >
@@ -10,7 +12,9 @@
     </div>
 
     <div class="flex items-center gap-4">
-      <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">Priority</span>
+      <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">{{
+        __("Priority")
+      }}</span>
       <span
         class="flex-1 truncate rounded border border-outline-gray-2 bg-surface-base px-2 py-1 text-p-sm text-ink-gray-9"
       >
@@ -25,7 +29,7 @@
     >
       <Tooltip :text="dayjs(data.value).format('LLLL')">
         <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">{{
-          data.title
+          __(data.title)
         }}</span>
       </Tooltip>
       <span class="flex-1 truncate text-p-sm" :class="data.textColor">
@@ -39,7 +43,7 @@
       class="flex items-center gap-4"
     >
       <span class="w-[150px] shrink-0 text-p-sm text-ink-gray-5">{{
-        field.label
+        __(field.label)
       }}</span>
       <span
         class="flex-1 truncate rounded border border-outline-gray-2 bg-surface-base px-2 py-1 text-p-sm"

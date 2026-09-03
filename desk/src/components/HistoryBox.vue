@@ -61,6 +61,7 @@
 
 <script setup lang="ts">
 import { SelectIcon } from "@/components/icons";
+import { __ } from "@/translation";
 import { dateFormat, dateTooltipFormat, timeAgo } from "@/utils";
 import { computed, ref } from "vue";
 const props = defineProps({
