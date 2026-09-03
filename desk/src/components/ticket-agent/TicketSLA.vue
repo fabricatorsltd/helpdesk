@@ -22,22 +22,22 @@
           v-if="!ticket.doc.via_customer_portal"
           class="text-ink-gray-5 flex items-center"
         >
-          <span class="mr-[4px]">via</span>
+          <span class="mr-[4px]">{{ __("via") }}</span>
           <EmailIcon class="size-4 inline-block mr-1" />
-          <span>Email</span>
+          <span>{{ __("Email") }}</span>
         </div>
         <!-- Via Portal -->
         <div v-else class="text-ink-gray-5 flex items-center">
-          <span class="mr-[4px]">via</span>
+          <span class="mr-[4px]">{{ __("via") }}</span>
           <GlobeIcon class="size-4 inline-block mr-1" />
-          <span>Portal</span>
+          <span>{{ __("Portal") }}</span>
         </div>
       </div>
       <!-- divider -->
       <div class="border-l border-outline-gray-2 h-[13px]" />
       <!-- First Response -->
       <div class="flex items-center gap-1">
-        <span>First Response</span>
+        <span>{{ __("First Response") }}</span>
 
         <Tooltip
           :text="dateFormat(firstResponse.date, dateTooltipFormat)"
@@ -56,7 +56,7 @@
       <div class="border-l border-outline-gray-2 h-[13px]" />
       <!-- Resolution by -->
       <div class="flex items-center gap-1">
-        <span>Resolution </span>
+        <span>{{ __("Resolution") }} </span>
         <Tooltip
           :text="dateFormat(resolutionBy.date, dateTooltipFormat)"
           :hover-delay="0.25"
@@ -80,6 +80,7 @@
 
 <script setup lang="ts">
 import { useShortcut } from "@/composables/shortcuts";
+import { __ } from "@/translation";
 import { TicketSymbol } from "@/types";
 import {
   copyToClipboard,

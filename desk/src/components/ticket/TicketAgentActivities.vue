@@ -1,5 +1,5 @@
 <template>
-  <ActivityHeader :title="title" />
+  <ActivityHeader :title="title" :tab-name="tabName" />
   <FadedScrollableDiv
     class="flex flex-col flex-1 overflow-y-auto"
     :mask-length="20"
@@ -137,6 +137,12 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  // Untranslated tab identifier, used for all string comparisons so that a
+  // translated title cannot break the behaviour.
+  tabName: {
+    type: String,
+    required: true,
+  },
   ticketStatus: {
     type: String,
     default: "",
@@ -152,20 +158,20 @@ const { getUser } = useUserStore();
 const makeCall = inject<() => void>("makeCall");
 
 const emptyText = computed(() => {
-  if (props.title === "Emails") return "No email communications";
-  if (props.title === "Comments") return "No comments found";
-  if (props.title === "Calls") return "No calls made";
+  if (props.tabName === "email") return "No email communications";
+  if (props.tabName === "comment") return "No comments found";
+  if (props.tabName === "call") return "No calls made";
 
   return "No activity found";
 });
 
 const emptyTextIcon = computed(() => {
   let icon = ActivityIcon;
-  if (props.title == "Emails") {
+  if (props.tabName == "email") {
     icon = EmailIcon;
-  } else if (props.title == "Comments") {
+  } else if (props.tabName == "comment") {
     icon = CommentIcon;
-  } else if (props.title == "Calls") {
+  } else if (props.tabName == "call") {
     icon = PhoneIcon;
   }
   return h(icon, { class: "text-ink-gray-4" });
@@ -227,7 +233,7 @@ watch(
 );
 
 watch(
-  () => props.title,
+  () => props.tabName,
   () => {
     scrollToLatestActivity();
   },

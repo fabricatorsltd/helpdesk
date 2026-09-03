@@ -146,6 +146,7 @@ import { useNotifyTicketUpdate } from "@/composables/realtime";
 import { useShortcut } from "@/composables/shortcuts";
 import { getMeta } from "@/stores/meta";
 import { useTicketStatusStore } from "@/stores/ticketStatus";
+import { __ } from "@/translation";
 import {
   ActivitiesSymbol,
   AssigneeSymbol,
@@ -290,15 +291,14 @@ function openTicket(name: string) {
 }
 
 function getFieldInFormat(fieldTemplate, fieldMeta) {
+  const label = __(fieldMeta?.label || fieldTemplate.fieldname);
   return {
-    label: fieldMeta?.label || fieldTemplate.fieldname,
+    label,
     value: ticket.value.doc[fieldTemplate.fieldname],
     fieldtype: fieldMeta?.fieldtype,
     doctype: fieldMeta?.options || "",
     options: fieldMeta?.options || "",
-    placeholder:
-      fieldTemplate.placeholder ||
-      `Enter ${fieldMeta?.label || fieldTemplate.fieldname}`,
+    placeholder: fieldTemplate.placeholder || __("Enter {0}", [label]),
     readonly: Boolean(fieldMeta.read_only),
     disabled: Boolean(fieldMeta.read_only),
     url_method: fieldTemplate.url_method || "",

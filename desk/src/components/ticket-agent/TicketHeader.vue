@@ -48,7 +48,7 @@
         <!-- Status -->
         <Dropdown :options="statusDropdown" placement="right">
           <template #default="{ open }">
-            <Button :label="ticket.doc.status" ref="statusRef">
+            <Button :label="__(ticket.doc.status)" ref="statusRef">
               <template #prefix>
                 <IndicatorIcon
                   :class="
@@ -149,7 +149,7 @@ const statusDropdown = computed(() => {
   const statuses =
     ticketStatusStore.statuses.data?.filter((s) => s.enabled) || [];
   return statuses.map((o: HDTicketStatus) => ({
-    label: o.label_agent,
+    label: __(o.label_agent),
     value: o.label_agent,
     onClick: () => {
       notifyTicketUpdate("Status", o.label_agent);

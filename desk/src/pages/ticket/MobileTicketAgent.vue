@@ -94,6 +94,7 @@
                 ref="ticketAgentActivitiesRef"
                 :activities="filterActivities(tab.name)"
                 :title="tab.label"
+                :tab-name="tab.name"
                 :ticket-status="ticket.doc?.status"
                 @update="() => reloadTicket(props.ticketId)"
                 @email:reply="

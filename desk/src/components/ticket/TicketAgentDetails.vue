@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { __ } from "@/translation";
 import {
   dateFormat,
   dateTooltipFormat,
@@ -144,13 +145,13 @@ function getCalculatedResolution() {
 
 const sections = computed(() => [
   {
-    label: "First Response",
+    label: __("First Response"),
     tooltipValue: dateFormat(props.ticket.response_by, dateTooltipFormat),
     badgeText: firstResponseBadge.value.label,
     badgeColor: firstResponseBadge.value.color,
   },
   {
-    label: "Resolution",
+    label: __("Resolution"),
     tooltipValue: dateFormat(
       props.ticket.resolution_date || props.ticket.resolution_by,
       dateTooltipFormat
@@ -159,8 +160,8 @@ const sections = computed(() => [
     badgeColor: resolutionBadge.value.color,
   },
   {
-    label: "Source",
-    value: props.ticket.via_customer_portal ? "Portal" : "Mail",
+    label: __("Source"),
+    value: props.ticket.via_customer_portal ? __("Portal") : __("Mail"),
   },
 ]);
 
