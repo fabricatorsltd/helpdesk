@@ -124,6 +124,7 @@ class HDTicket(Document):
         if (
             self.is_new()
             or self.via_customer_portal
+            or self.is_merged
             or self.feedback_rating
             or not self.has_value_changed("status")
             or not self.key
@@ -156,7 +157,7 @@ class HDTicket(Document):
             with use_language(resolve_ticket_language(self)):
                 frappe.sendmail(
                     recipients=[self.raised_by],
-                    subject=f"Re: {self.subject}",
+                    subject=_("[Feedback] #{0}: {1}").format(self.name, self.subject),
                     message=self._get_rendered_template(
                         feedback_email_content,
                         default_feedback_email_content,
