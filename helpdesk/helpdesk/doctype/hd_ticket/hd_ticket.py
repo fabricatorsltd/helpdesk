@@ -1501,6 +1501,10 @@ def has_permission(doc, user=None):
         return True
     if _is_customer_manager(doc.customer, user):
         return True
+    # The list already shows every ticket of a company-wide customer; opening
+    # one must pass too.
+    if doc.customer and doc.customer in _get_company_wide_customers(user):
+        return True
     if _user_in_cc(doc, user):
         return True
     if not is_agent(user):
