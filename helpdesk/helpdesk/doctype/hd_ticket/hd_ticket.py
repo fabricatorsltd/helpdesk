@@ -1015,15 +1015,8 @@ class HDTicket(Document):
                 _("Could not send an acknowledgement email due to: {0}").format(e)
             )
 
-    def notify_agents_new_ticket(self):
-        recipients = [
-            a
-            for a in frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
-            if a and "@" in a
-        ]
-        if not recipients:
-            return
-
+    def _agent_email_context(self):
+        """Template args shared by the agent-facing ticket emails."""
         contact_name = None
         if self.contact:
             names = frappe.db.get_value(
@@ -1044,6 +1037,31 @@ class HDTicket(Document):
                     "name",
                 )
 
+        return {
+            "raised_by": self.raised_by,
+            "contact_name": contact_name,
+            "customer": self.customer,
+            "contract": contract,
+            "message": self.description,
+            "response_by": frappe.utils.format_datetime(self.response_by)
+            if self.response_by
+            else None,
+            "resolution_by": frappe.utils.format_datetime(self.resolution_by)
+            if self.resolution_by
+            else None,
+            # Agent-facing link, so the ERP host and not the customer portal.
+            "ticket_url": frappe.utils.get_url("/helpdesk/tickets/" + str(self.name)),
+        }
+
+    def notify_agents_new_ticket(self):
+        recipients = [
+            a
+            for a in frappe.get_all("HD Agent", filters={"is_active": 1}, pluck="name")
+            if a and "@" in a
+        ]
+        if not recipients:
+            return
+
         default_content = get_default_email_content("new_ticket_to_agents")
         try:
             with use_language(get_default_language()):
@@ -1053,24 +1071,7 @@ class HDTicket(Document):
                     message=self._get_rendered_template(
                         None,
                         default_content,
-                        {
-                            "raised_by": self.raised_by,
-                            "contact_name": contact_name,
-                            "customer": self.customer,
-                            "contract": contract,
-                            "message": self.description,
-                            "response_by": frappe.utils.format_datetime(self.response_by)
-                            if self.response_by
-                            else None,
-                            "resolution_by": frappe.utils.format_datetime(
-                                self.resolution_by
-                            )
-                            if self.resolution_by
-                            else None,
-                            "ticket_url": frappe.utils.get_url(
-                                "/helpdesk/tickets/" + str(self.name)
-                            ),
-                        },
+                        self._agent_email_context(),
                     ),
                     reference_doctype="HD Ticket",
                     reference_name=self.name,
@@ -1079,6 +1080,43 @@ class HDTicket(Document):
                 )
         except Exception:
             self.log_error("Could not notify agents of the new ticket")
+
+    def notify_agent_assignment(self, agent, assigned_by):
+        """Email the agent a ticket got assigned to. The generic Frappe
+        assignment mail is suppressed for agents, this replaces it."""
+        if not agent or "@" not in agent:
+            return
+        if not frappe.db.exists("HD Agent", agent):
+            return
+        user = frappe.db.get_value(
+            "User", agent, ["enabled", "language"], as_dict=True
+        )
+        if not user or not user.enabled:
+            return
+
+        try:
+            context = self._agent_email_context()
+            context["assigned_by"] = (
+                frappe.db.get_value("User", assigned_by, "full_name") or assigned_by
+            )
+            with use_language(user.language or get_default_language()):
+                frappe.sendmail(
+                    recipients=[agent],
+                    subject=_("[Assigned to you] #{0}: {1}").format(
+                        self.name, self.subject
+                    ),
+                    message=self._get_rendered_template(
+                        None,
+                        get_default_email_content("assigned_to_agent"),
+                        context,
+                    ),
+                    reference_doctype="HD Ticket",
+                    reference_name=self.name,
+                    now=True,
+                    email_headers={"X-Auto-Generated": "hd-assignment-agent"},
+                )
+        except Exception:
+            self.log_error("Could not notify the agent of the assignment")
 
     @frappe.whitelist()
     def mark_seen(self):

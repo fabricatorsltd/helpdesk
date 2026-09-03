@@ -100,6 +100,9 @@ doc_events = {
     "Notification Log": {
         "before_insert": "helpdesk.extends.notification_log.before_insert",
     },
+    "ToDo": {
+        "after_insert": "helpdesk.extends.todo.after_insert",
+    },
 }
 
 # For List View
@@ -123,6 +126,7 @@ override_doctype_class = {
     "Email Account": "helpdesk.overrides.email_account.CustomEmailAccount",
     "Assignment Rule": "helpdesk.overrides.assignment_rule.HelpdeskAssignmentRule",
     "User Invitation": "helpdesk.overrides.user_invitation.HelpdeskUserInvitation",
+    "Notification Log": "helpdesk.overrides.notification_log.HelpdeskNotificationLog",
 }
 
 ignore_links_on_delete = [
