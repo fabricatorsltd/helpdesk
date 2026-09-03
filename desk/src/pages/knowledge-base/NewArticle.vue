@@ -32,6 +32,12 @@
             />
           </div>
         </div>
+        <!-- Audience + language -->
+        <ArticleAudienceFields
+          v-model:language="fabLanguage"
+          v-model:visibility="fabVisibility"
+          v-model:customers="fabCustomers"
+        />
         <!-- Title -->
         <textarea
           class="w-full resize-none border-0 bg-transparent text-4xl-bold placeholder-ink-gray-3 p-0 pb-3 border-b border-outline-elevation-2 focus:ring-0 focus:border-outline-elevation-2"
@@ -81,6 +87,7 @@ import { computed, ref, watch } from "vue";
 import { __ } from "@/translation";
 
 import { LayoutHeader, UserAvatar } from "@/components";
+import ArticleAudienceFields from "@/components/knowledge-base/ArticleAudienceFields.vue";
 import { useAuthStore } from "@/stores/auth";
 import { globalStore } from "@/stores/globalStore";
 import { newArticle } from "@/stores/knowledgeBase";
@@ -99,6 +106,10 @@ const { isManager } = useAuthStore();
 
 const title = ref("");
 const content = ref("");
+// Audience + language, same controls as the article editor
+const fabVisibility = ref("Public");
+const fabLanguage = ref("");
+const fabCustomers = ref<string[]>([]);
 
 const props = defineProps({
   id: {
@@ -112,7 +123,14 @@ const categoryName = computed(() => (route.query.title as string) || "");
 
 function handleCreateArticle() {
   newArticle.submit(
-    { title: title.value, content: content.value, category: categoryId.value },
+    {
+      title: title.value,
+      content: content.value,
+      category: categoryId.value,
+      fabVisibility: fabVisibility.value,
+      fabLanguage: fabLanguage.value,
+      fabCustomers: fabCustomers.value,
+    },
     {
       onSuccess: (article: Article) => {
         toast.success(__("Article created successfully."));
@@ -162,6 +180,9 @@ function handleArticleDiscard() {
 function resetState() {
   title.value = "";
   content.value = "";
+  fabVisibility.value = "Public";
+  fabLanguage.value = "";
+  fabCustomers.value = [];
 }
 
 const breadcrumbs = computed(() => {
