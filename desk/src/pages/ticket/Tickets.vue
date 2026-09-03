@@ -66,6 +66,11 @@
       :selections="listSelections"
       @success="reset(true)"
     />
+    <BulkMergeModal
+      v-model="showBulkMergeModal"
+      :selections="listSelections"
+      @success="onBulkMergeSuccess"
+    />
   </div>
 </template>
 
@@ -77,6 +82,7 @@ import TicketPriority from "@/components/TicketPriority.vue";
 import BulkAssignModal from "@/components/ticket-agent/BulkAssignModal.vue";
 import BulkEditModal from "@/components/ticket-agent/BulkEditModal.vue";
 import BulkReplyModal from "@/components/ticket-agent/BulkReplyModal.vue";
+import BulkMergeModal from "@/components/ticket/BulkMergeModal.vue";
 import ExportModal from "@/components/ticket/ExportModal.vue";
 import ViewBreadcrumbs from "@/components/ViewBreadcrumbs.vue";
 import { normalizeFilters } from "@/components/view-controls/filter";
@@ -88,7 +94,7 @@ import { useTicketStatusStore } from "@/stores/ticketStatus";
 import { __ } from "@/translation";
 import { View } from "@/types";
 import { isCustomerPortal, shortDuration } from "@/utils";
-import { Badge, dayjs, Tooltip, usePageMeta } from "frappe-ui";
+import { Badge, dayjs, toast, Tooltip, usePageMeta } from "frappe-ui";
 import { computed, h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -127,6 +133,7 @@ const showBulkAssignModal = ref(false);
 
 // Replying, assigning and editing in bulk are agent-side actions only.
 const agentOnly = () => !isCustomerPortal.value;
+const showBulkMergeModal = ref(false);
 
 const selectBannerActions = [
   {
@@ -147,6 +154,19 @@ const selectBannerActions = [
     onClick: (selections: Set<string>) => {
       listSelections.value = new Set(selections);
       showBulkAssignModal.value = true;
+    },
+  },
+  {
+    label: __("Merge"),
+    icon: "lucide-merge",
+    condition: agentOnly,
+    onClick: (selections: Set<string>) => {
+      if (selections.size < 2) {
+        toast.error(__("Select at least two tickets"));
+        return;
+      }
+      listSelections.value = new Set(selections);
+      showBulkMergeModal.value = true;
     },
   },
   {
@@ -306,6 +326,11 @@ function handleResolutionByField(row: any, item: string) {
       theme: "violet",
     })
   );
+}
+
+function onBulkMergeSuccess() {
+  listViewRef.value?.reload();
+  listViewRef.value?.unselectAll();
 }
 
 async function exportRows(
