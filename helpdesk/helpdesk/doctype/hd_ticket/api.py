@@ -474,6 +474,10 @@ def duplicate_list_retain_timestamp(doctype, activities: list, target: str, cont
 
         if doctype == "Communication":
             duplicate_doc.reference_name = target
+            # Inbound mails are stored with unvalidated addresses ("addr <addr>");
+            # the flag only skips validate_email, as the original insert did.
+            if original_doc.sent_or_received == "Received":
+                duplicate_doc.flags.in_receive = True
             attachments = get_attachments(
                 "Communication",
                 activity,

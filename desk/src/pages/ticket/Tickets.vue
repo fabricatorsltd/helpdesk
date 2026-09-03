@@ -56,6 +56,11 @@
       :selections="listSelections"
       @success="listViewRef?.unselectAll()"
     />
+    <BulkMergeModal
+      v-model="showBulkMergeModal"
+      :selections="listSelections"
+      @success="onBulkMergeSuccess"
+    />
   </div>
 </template>
 
@@ -64,6 +69,7 @@ import { LayoutHeader, ListViewBuilder } from "@/components";
 import { TicketIcon } from "@/components/icons";
 import IndicatorIcon from "@/components/icons/IndicatorIcon.vue";
 import BulkReplyModal from "@/components/ticket-agent/BulkReplyModal.vue";
+import BulkMergeModal from "@/components/ticket/BulkMergeModal.vue";
 import ExportModal from "@/components/ticket/ExportModal.vue";
 import ViewBreadcrumbs from "@/components/ViewBreadcrumbs.vue";
 import { normalizeFilters } from "@/components/view-controls/filter";
@@ -75,7 +81,7 @@ import { useTicketStatusStore } from "@/stores/ticketStatus";
 import { __ } from "@/translation";
 import { View } from "@/types";
 import { isCustomerPortal, shortDuration } from "@/utils";
-import { Badge, dayjs, Tooltip, usePageMeta } from "frappe-ui";
+import { Badge, dayjs, toast, Tooltip, usePageMeta } from "frappe-ui";
 import { computed, h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -109,6 +115,7 @@ const { getStatus } = useTicketStatusStore();
 const listSelections = ref(new Set());
 
 const showBulkReplyModal = ref(false);
+const showBulkMergeModal = ref(false);
 
 const selectBannerActions = [
   {
@@ -117,6 +124,18 @@ const selectBannerActions = [
     onClick: (selections: Set<string>) => {
       listSelections.value = new Set(selections);
       showBulkReplyModal.value = true;
+    },
+  },
+  {
+    label: __("Merge"),
+    icon: "lucide-merge",
+    onClick: (selections: Set<string>) => {
+      if (selections.size < 2) {
+        toast.error(__("Select at least two tickets"));
+        return;
+      }
+      listSelections.value = new Set(selections);
+      showBulkMergeModal.value = true;
     },
   },
   {
@@ -278,6 +297,11 @@ function handleResolutionByField(row: any, item: string) {
       theme: "orange",
     })
   );
+}
+
+function onBulkMergeSuccess() {
+  listViewRef.value?.reload();
+  listViewRef.value?.unselectAll();
 }
 
 async function exportRows(
