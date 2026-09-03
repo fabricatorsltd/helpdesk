@@ -62,22 +62,40 @@ class CustomInboundMail(InboundMail):
             return self._reference_document
 
         reference_document = super().reference_document()
-        if reference_document:
-            return reference_document
 
         # Frappe only falls back to subject matching when the doctype sits on the
         # Email Account. With IMAP folders it sits on the folder row and reaches us
         # as self.append_to, so a reply carrying "(#0026)" but no usable In-Reply-To
         # opened a second ticket. Recover the thread from the subject, but only for
         # senders already entitled to it.
-        if self.append_to == "HD Ticket" and not self.email_account.append_to:
-            ticket = self.ticket_from_subject()
-            if ticket:
-                self._reference_document = ticket
-                return self._reference_document
+        if (
+            not reference_document
+            and self.append_to == "HD Ticket"
+            and not self.email_account.append_to
+        ):
+            reference_document = self.ticket_from_subject()
 
-        self._reference_document = ""
+        self._reference_document = self.follow_merged_ticket(reference_document) or ""
         return self._reference_document
+
+    def follow_merged_ticket(self, reference_document):
+        """A mail landing on a merged ticket belongs to the ticket it was merged
+        into: walk the chain so the Communication is filed there from the start."""
+        if not reference_document or reference_document.doctype != "HD Ticket":
+            return reference_document
+
+        ticket = reference_document
+        visited = {ticket.name}
+        while ticket.is_merged and ticket.merged_with:
+            if ticket.merged_with in visited:
+                break
+            target = self.get_doc("HD Ticket", ticket.merged_with, ignore_error=True)
+            if not target:
+                break
+            visited.add(target.name)
+            ticket = target
+
+        return ticket
 
     def ticket_from_subject(self):
         """Ticket named in the subject tag, if the sender may write to it."""

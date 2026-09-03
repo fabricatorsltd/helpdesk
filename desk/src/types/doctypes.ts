@@ -29,6 +29,8 @@ export interface HDTicketStatus extends DocType {
   order?: number;
   /** Enabled: Check */
   enabled: 0 | 1;
+  /** System only: Check (custom field, fab_helpdesk) */
+  fab_system_only?: 0 | 1;
 }
 
 // Last updated: 2026-06-28 13:51:31.692161
