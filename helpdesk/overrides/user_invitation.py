@@ -67,21 +67,20 @@ class HelpdeskUserInvitation(UserInvitation):
 
     @frappe.whitelist()
     def expire(self):
-        # Expiry mails are sent by the daily scheduler job, which runs with lang
-        # "en", so render them in the language of the agent who invited.
+        # The framework mails the inviter, but the text ("ask your team to
+        # resend the invitation") is written for the invitee: send it to the
+        # customer instead, in the portal language. The scheduler job that
+        # expires invitations runs with lang "en", hence the explicit context.
         if self.app_name != "helpdesk":
             return super().expire()
         if self.status != "Pending":
             return
         self.status = "Expired"
         self.save()
-        inviter = frappe.db.get_value(
-            "User", self.invited_by, ["email", "language"], as_dict=True
-        )
-        with use_language(inviter.language or get_default_language()):
+        with use_language(get_default_language()):
             email_title = self._get_email_title()
             frappe.sendmail(
-                recipients=inviter.email,
+                recipients=self.email,
                 subject=_("Invitation to join {0} expired").format(email_title),
                 template="user_invitation_expired",
                 args={"title": email_title},
