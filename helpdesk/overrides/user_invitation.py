@@ -44,6 +44,50 @@ class HelpdeskUserInvitation(UserInvitation):
         self.db_set("email_sent_at", frappe.utils.now())
         return key
 
+    @frappe.whitelist()
+    def cancel_invite(self):
+        # The invitee is a customer, so render the notice in the portal default
+        # language instead of the language of the agent cancelling the invite.
+        if self.app_name != "helpdesk":
+            return super().cancel_invite()
+        if self.status != "Pending":
+            return False
+        self.status = "Cancelled"
+        self.save()
+        with use_language(get_default_language()):
+            email_title = self._get_email_title()
+            frappe.sendmail(
+                recipients=self.email,
+                subject=_("Invitation to join {0} cancelled").format(email_title),
+                template="user_invitation_cancelled",
+                args={"title": email_title},
+                now=True,
+            )
+        return True
+
+    @frappe.whitelist()
+    def expire(self):
+        # Expiry mails are sent by the daily scheduler job, which runs with lang
+        # "en", so render them in the language of the agent who invited.
+        if self.app_name != "helpdesk":
+            return super().expire()
+        if self.status != "Pending":
+            return
+        self.status = "Expired"
+        self.save()
+        inviter = frappe.db.get_value(
+            "User", self.invited_by, ["email", "language"], as_dict=True
+        )
+        with use_language(inviter.language or get_default_language()):
+            email_title = self._get_email_title()
+            frappe.sendmail(
+                recipients=inviter.email,
+                subject=_("Invitation to join {0} expired").format(email_title),
+                template="user_invitation_expired",
+                args={"title": email_title},
+                now=False,
+            )
+
     def _helpdesk_invite_link(self, key: str) -> str:
         path = f"/api/method/frappe.core.api.user_invitation.accept_invitation?key={key}"
         # Route the accept link to the customer portal host. Prefer the configured
