@@ -695,6 +695,10 @@ export interface HDSettings {
   disableSavedRepliesGlobalScope: boolean;
   enableOutsideHoursBanner: boolean;
   outsideWorkingHoursBannerMessage: string;
+  inactivityEnabled: boolean;
+  inactivityStatus: string;
+  inactivityReminderDays: string;
+  inactivityCloseDays: string;
 }
 
 export interface HolidayList {

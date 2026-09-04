@@ -38,7 +38,8 @@ scheduler_events = {
         "helpdesk.search.download_corpus",
     ],
     "daily": [
-        "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days"
+        "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days",
+        "helpdesk.helpdesk.doctype.hd_ticket.inactivity.run",
     ],
     "hourly_long": [
         "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.update_sla_status_in_ticket"

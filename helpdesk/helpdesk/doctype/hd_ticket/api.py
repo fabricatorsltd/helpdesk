@@ -286,6 +286,17 @@ def translate_activity(action: str) -> str:
             match.group(1)
         )
 
+    if action == "sent the customer an inactivity reminder":
+        return _("sent the customer an inactivity reminder")
+
+    match = re.fullmatch(
+        r"closed the ticket after (\d+) days? without a reply from the customer", action
+    )
+    if match:
+        return _(
+            "closed the ticket after {0} days without a reply from the customer"
+        ).format(match.group(1))
+
     parts = []
     for part in action.split(" & "):
         match = re.fullmatch(r"(assigned|unassigned) (.+)", part)

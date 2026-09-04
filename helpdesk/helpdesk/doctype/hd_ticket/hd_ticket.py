@@ -1291,6 +1291,12 @@ class HDTicket(Document):
                     "HD Settings", "update_status_to"
                 )
 
+        # The inactivity countdown starts at the newest message on the thread,
+        # whoever wrote it. The reminder and closure mails are automated messages
+        # and returned above, so they never clear the mark they set.
+        if self.meta.has_field("fab_inactivity_reminder_on"):
+            self.fab_inactivity_reminder_on = None
+
         # Fetch description from communication if not set already. This might not be needed
         # anymore as a communication is created when a ticket is created.
         first_message = not self.description

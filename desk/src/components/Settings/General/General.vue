@@ -103,6 +103,10 @@ const settingsData = ref({
   disableSavedRepliesGlobalScope: false,
   enableOutsideHoursBanner: false,
   outsideWorkingHoursBannerMessage: "",
+  inactivityEnabled: false,
+  inactivityStatus: "",
+  inactivityReminderDays: "",
+  inactivityCloseDays: "",
 });
 const disableSignup = ref(false);
 
@@ -159,6 +163,14 @@ const saveSettingsResource = createResource({
           settingsData.value.enableOutsideHoursBanner,
         outside_working_hours_message:
           settingsData.value.outsideWorkingHoursBannerMessage,
+        fab_inactivity_enabled: settingsData.value.inactivityEnabled,
+        fab_inactivity_status: settingsData.value.inactivityStatus,
+        fab_inactivity_reminder_days: Number(
+          settingsData.value.inactivityReminderDays
+        ),
+        fab_inactivity_close_days: Number(
+          settingsData.value.inactivityCloseDays
+        ),
       },
     };
   },
@@ -195,6 +207,10 @@ const transformData = (data: any) => {
     ),
     enableOutsideHoursBanner: Boolean(data.enable_outside_hours_banner),
     outsideWorkingHoursBannerMessage: data.outside_working_hours_message || "",
+    inactivityEnabled: Boolean(data.fab_inactivity_enabled),
+    inactivityStatus: data.fab_inactivity_status,
+    inactivityReminderDays: data.fab_inactivity_reminder_days,
+    inactivityCloseDays: data.fab_inactivity_close_days,
   };
 };
 
