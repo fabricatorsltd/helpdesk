@@ -391,7 +391,7 @@ class HDCustomer(Document):
         )
         if existing_customer:
             frappe.db.set_value("Customer", existing_customer, "hd_customer", self.name)
-            frappe.db.set_value("HD Customer", self.name, "erpnext_customer", existing_customer)
+            self.db_set("erpnext_customer", existing_customer, update_modified=False)
             return
 
         # create a new customer in ERPNext with the same name as the HD Customer and link them together
@@ -405,7 +405,7 @@ class HDCustomer(Document):
         )
         erp_doc.flags.ignore_erpnext_sync = True
         erp_doc.insert(ignore_permissions=True)
-        frappe.db.set_value("HD Customer", self.name, "erpnext_customer", erp_doc.name)
+        self.db_set("erpnext_customer", erp_doc.name, update_modified=False)
 
     def on_update(self):
         if not should_sync_with_erpnext() or self.flags.get("ignore_erpnext_sync"):
