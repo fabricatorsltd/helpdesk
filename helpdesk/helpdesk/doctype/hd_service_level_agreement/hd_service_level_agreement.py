@@ -234,6 +234,10 @@ class HDServiceLevelAgreement(Document):
         time_took_effective = max(time_took - time_hold, 0)
         doc.resolution_time = time_took_effective
 
+        # nothing to fail against when the SLA does not commit to a resolution
+        if not doc.resolution_by:
+            return
+
         # if resolution is failed calculate by how much time it is failed in business hours
         if get_datetime(doc.resolution_date) > get_datetime(doc.resolution_by):
             start_at = doc.resolution_by
@@ -281,6 +285,11 @@ class HDServiceLevelAgreement(Document):
         )
 
     def set_resolution_by(self, doc: Document):
+        if not self.apply_sla_for_resolution:
+            # a zero resolution time would otherwise land on the creation
+            # instant and show the ticket as overdue from the first second
+            doc.resolution_by = None
+            return
         total_hold_time = doc.total_hold_time or 0
         doc.resolution_by = self.calc_time(
             doc.service_level_agreement_creation,
@@ -483,6 +492,40 @@ class HDServiceLevelAgreement(Document):
             if day_name in working_hours and next_date not in holidays:
                 return get_datetime(next_date) + working_hours[day_name][0]
         return None
+
+    def shift_working_days(self, date_time, days: int):
+        """
+        Move `date_time` by `days` working days, keeping the time of day.
+
+        Days the SLA does not work on, and the holidays it declares, are stepped
+        over without being counted. A negative `days` walks backwards. An SLA
+        with no workday configured has no calendar to follow, so it falls back
+        to plain calendar days.
+
+        Unlike `calc_time`, this counts whole days rather than working seconds.
+
+        :param date_time: Start datetime
+        :param days: Working days to move by, negative to go back
+        :return: DateTime `days` working days away from `date_time`
+        """
+        result = get_datetime(date_time)
+        workdays = self.get_workdays()
+        if not days or not workdays:
+            return add_to_date(result, days=days, as_datetime=True)
+
+        holidays = set(self.get_holidays())
+        days_list = get_weekdays()
+        step = 1 if days > 0 else -1
+        remaining = abs(days)
+
+        while remaining:
+            result = add_to_date(result, days=step, as_datetime=True)
+            if getdate(result) in holidays:
+                continue
+            if days_list[result.weekday()] not in workdays:
+                continue
+            remaining -= 1
+        return result
 
     def get_holidays(self):
         res = []
