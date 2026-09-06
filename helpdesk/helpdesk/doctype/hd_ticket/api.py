@@ -413,6 +413,13 @@ def get_attachments(doctype, name):
     )
 
 
+def merged_ticket_status() -> str:
+    """A merge is not a closure: give it its own status where the site has the
+    record, so lists and pickers can tell the two apart. Sites without it
+    (upstream, or before fab_helpdesk migrates) keep the old behaviour."""
+    return "Merged" if frappe.db.exists("HD Ticket Status", "Merged") else "Closed"
+
+
 @frappe.whitelist()
 @agent_only
 def merge_ticket(source: str, target: str):
@@ -451,12 +458,7 @@ def merge_ticket(source: str, target: str):
 
     doc = frappe.get_doc("HD Ticket", source)
 
-    # A merge is not a closure: give it its own status where the site has the
-    # record, so lists and pickers can tell the two apart. Sites without it
-    # (upstream, or before fab_helpdesk migrates) keep the old behaviour.
-    doc.status = (
-        "Merged" if frappe.db.exists("HD Ticket Status", "Merged") else "Closed"
-    )
+    doc.status = merged_ticket_status()
     doc.is_merged = 1
     doc.merged_with = target
     doc.save()
