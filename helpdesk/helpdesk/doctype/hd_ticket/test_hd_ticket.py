@@ -12,6 +12,7 @@ from helpdesk.api.ticket import bulk_reply
 from helpdesk.consts import DEFAULT_SLA
 from helpdesk.helpdesk.doctype.hd_ticket.api import (
     merge_ticket,
+    merged_ticket_status,
     show_outside_hours_banner,
     split_ticket,
 )
@@ -20,6 +21,7 @@ from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import (
     has_permission,
     permission_query,
 )
+from helpdesk.helpdesk.utils.email import helpdesk_outgoing_email_account
 from helpdesk.test_utils import (
     SLA_PRIORITY_NAME,
     add_comment,
@@ -30,6 +32,7 @@ from helpdesk.test_utils import (
     get_current_week_monday,
     get_latest_ticket_communication,
     get_priority_response_resolution_time,
+    ignored_test_record_dependencies,
     make_priority,
     make_sla,
     make_status,
@@ -40,6 +43,8 @@ from helpdesk.test_utils import (
     update_role_in_customer,
     upload_test_file,
 )
+
+IGNORE_TEST_RECORD_DEPENDENCIES = ignored_test_record_dependencies("HD Ticket")
 
 ERROR_MSG_RESPONSE = "Response time differs by more than 1 second"
 ERROR_MSG_RESOLUTION = "Resolution time differs by more than 1 second"
@@ -667,7 +672,7 @@ class TestHDTicket(FrappeTestCase):
 
         merge_ticket(source=ticket1.name, target=ticket2.name)
         ticket1.reload()
-        self.assertEqual(ticket1.status, "Closed")
+        self.assertEqual(ticket1.status, merged_ticket_status())
         self.assertTrue(ticket1.is_merged)
         self.assertEqual(ticket1.merged_with, ticket2.name)
 
@@ -690,7 +695,7 @@ class TestHDTicket(FrappeTestCase):
         merge_ticket(source=source.name, target=target.name)
         source.reload()
         self.assertTrue(source.is_merged)
-        self.assertEqual(source.status, "Closed")
+        self.assertEqual(source.status, merged_ticket_status())
 
         # An incoming reply lands on the merged source ticket.
         communication = frappe.get_doc(
@@ -706,9 +711,9 @@ class TestHDTicket(FrappeTestCase):
             }
         ).insert(ignore_permissions=True)
 
-        # The merged source must stay closed and merged.
+        # The merged source must keep its merged state.
         source.reload()
-        self.assertEqual(source.status, "Closed")
+        self.assertEqual(source.status, merged_ticket_status())
         self.assertTrue(source.is_merged)
 
         # The communication is redirected to the target ticket.
@@ -1639,8 +1644,12 @@ class TestHDTicket(FrappeTestCase):
             # resolution_failed_by should be 15 minutes (in business hours seconds)
             self.assertEqual(ticket.resolution_failed_by, 15 * 60)
 
-    def test_reply_via_agent_default_sender(self):
-        """Without `from_email`, sender on the Communication is the session user."""
+    def test_reply_via_agent_always_sends_from_the_helpdesk_mailbox(self):
+        """A reply speaks for the helpdesk, so it leaves from the support mailbox.
+
+        Not from the agent, whose own address is not a mailbox we can send from,
+        and not from whatever personal Email Account sits on their User record.
+        """
         ticket = make_ticket()
 
         frappe.set_user(agent)
@@ -1649,14 +1658,22 @@ class TestHDTicket(FrappeTestCase):
         finally:
             frappe.set_user("Administrator")
 
+        account = helpdesk_outgoing_email_account()
         comm = frappe.get_last_doc(
             "Communication",
             filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
         )
-        self.assertEqual(comm.sender, agent)
+        self.assertEqual(comm.sender, account.email_id)
+        self.assertEqual(comm.email_account, account.name)
+        self.assertNotEqual(comm.sender, agent)
 
-    def test_reply_via_agent_with_from_email(self):
-        """When `from_email` is passed, the Communication uses it as sender/email_account."""
+    def test_reply_via_agent_ignores_the_requested_from_email(self):
+        """Another outgoing account may be asked for, and is refused.
+
+        The composer used to offer the agent's own Email Accounts, which let a
+        ticket reply go out as billing or as any other mailbox that happened to
+        be on their User record.
+        """
         email_account = frappe.get_doc(
             {
                 "doctype": "Email Account",
@@ -1682,29 +1699,37 @@ class TestHDTicket(FrappeTestCase):
         finally:
             frappe.set_user("Administrator")
 
+        account = helpdesk_outgoing_email_account()
         comm = frappe.get_last_doc(
             "Communication",
             filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
         )
-        self.assertEqual(comm.sender, email_account.email_id)
-        self.assertEqual(comm.email_account, email_account.name)
+        self.assertEqual(comm.sender, account.email_id)
+        self.assertEqual(comm.email_account, account.name)
+        self.assertNotEqual(comm.email_account, email_account.name)
 
-    def test_reply_via_agent_with_invalid_from_email_account(self):
-        """If `from_email.email_account` does not exist, reply_via_agent should throw."""
+    def test_reply_via_agent_ignores_an_email_account_that_does_not_exist(self):
+        """A stale account name from the composer no longer stops the reply."""
         ticket = make_ticket()
 
         frappe.set_user(agent)
         try:
-            with self.assertRaises(frappe.ValidationError):
-                ticket.reply_via_agent(
-                    message="Reply with bad email account",
-                    from_email={
-                        "email_id": "invalid@test.com",
-                        "email_account": "Invalid Email Account",
-                    },
-                )
+            ticket.reply_via_agent(
+                message="Reply with bad email account",
+                from_email={
+                    "email_id": "invalid@test.com",
+                    "email_account": "Invalid Email Account",
+                },
+            )
         finally:
             frappe.set_user("Administrator")
+
+        account = helpdesk_outgoing_email_account()
+        comm = frappe.get_last_doc(
+            "Communication",
+            filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
+        )
+        self.assertEqual(comm.sender, account.email_id)
 
     def test_bulk_reply(self):
         """
@@ -1852,6 +1877,19 @@ class TestHDTicket(FrappeTestCase):
         set_ticket_status_and_communication_date(
             fresh_ticket.name, eligible_status, within_cutoff
         )
+        # waiting on the customer since the last reply, with the resolution target
+        # long gone in the meantime: the wait is the customer's, not a breach
+        frappe.db.set_value(
+            "HD Ticket",
+            stale_ticket.name,
+            {
+                "first_responded_on": just_past_cutoff - timedelta(minutes=1),
+                "on_hold_since": just_past_cutoff,
+                "resolution_by": just_past_cutoff + timedelta(hours=1),
+                "agreement_status": "Paused",
+            },
+            update_modified=False,
+        )
 
         try:
             close_tickets_after_n_days()
@@ -1861,6 +1899,10 @@ class TestHDTicket(FrappeTestCase):
                 "Closed",
                 "Ticket inactive past the cutoff should be auto closed",
             )
+            closed = frappe.get_doc("HD Ticket", stale_ticket.name)
+            self.assertTrue(closed.resolution_date)
+            self.assertIsNone(closed.on_hold_since)
+            self.assertEqual(closed.agreement_status, "Fulfilled")
             self.assertEqual(
                 frappe.db.get_value("HD Ticket", fresh_ticket.name, "status"),
                 eligible_status,

@@ -15,9 +15,12 @@ from helpdesk.test_utils import (
     create_customer,
     create_user,
     get_invitation,
+    ignored_test_record_dependencies,
     make_ticket,
     update_role_in_customer,
 )
+
+IGNORE_TEST_RECORD_DEPENDENCIES = ignored_test_record_dependencies("HD Customer")
 
 
 class TestHDCustomer(FrappeTestCase):
