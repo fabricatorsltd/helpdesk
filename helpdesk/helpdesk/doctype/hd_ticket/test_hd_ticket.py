@@ -10,6 +10,7 @@ from frappe.utils import add_to_date, get_datetime, getdate, now_datetime
 from helpdesk.api.ticket import bulk_reply
 from helpdesk.helpdesk.doctype.hd_ticket.api import (
     merge_ticket,
+    merged_ticket_status,
     show_outside_hours_banner,
     split_ticket,
 )
@@ -23,6 +24,7 @@ from helpdesk.test_utils import (
     get_current_week_monday,
     get_latest_ticket_communication,
     get_priority_response_resolution_time,
+    ignored_test_record_dependencies,
     make_status,
     make_ticket,
     remove_holidays,
@@ -30,6 +32,8 @@ from helpdesk.test_utils import (
     update_role_in_customer,
     upload_test_file,
 )
+
+IGNORE_TEST_RECORD_DEPENDENCIES = ignored_test_record_dependencies("HD Ticket")
 
 ERROR_MSG_RESPONSE = "Response time differs by more than 1 second"
 ERROR_MSG_RESOLUTION = "Resolution time differs by more than 1 second"
@@ -624,7 +628,7 @@ class TestHDTicket(FrappeTestCase):
 
         merge_ticket(source=ticket1.name, target=ticket2.name)
         ticket1.reload()
-        self.assertEqual(ticket1.status, "Closed")
+        self.assertEqual(ticket1.status, merged_ticket_status())
         self.assertTrue(ticket1.is_merged)
         self.assertEqual(ticket1.merged_with, ticket2.name)
 
@@ -647,7 +651,7 @@ class TestHDTicket(FrappeTestCase):
         merge_ticket(source=source.name, target=target.name)
         source.reload()
         self.assertTrue(source.is_merged)
-        self.assertEqual(source.status, "Closed")
+        self.assertEqual(source.status, merged_ticket_status())
 
         # An incoming reply lands on the merged source ticket.
         communication = frappe.get_doc(
@@ -663,9 +667,9 @@ class TestHDTicket(FrappeTestCase):
             }
         ).insert(ignore_permissions=True)
 
-        # The merged source must stay closed and merged.
+        # The merged source must keep its merged state.
         source.reload()
-        self.assertEqual(source.status, "Closed")
+        self.assertEqual(source.status, merged_ticket_status())
         self.assertTrue(source.is_merged)
 
         # The communication is redirected to the target ticket.

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import frappe
+from frappe.cache_manager import clear_doctype_map
 from frappe.core.doctype.communication.test_communication import create_email_account
 from frappe.utils import add_to_date, getdate
 
@@ -17,6 +18,17 @@ else:
 SLA_PRIORITY_NAME = "SLA Priority"
 TEST_HOLIDAY_LIST_NAME = "Test Holiday List"
 
+# The shipped priorities are named P1..P4, while the test suite is written
+# against the upstream names. Keep both on the site so the suite is
+# self-sufficient without changing what a real install creates.
+# name: (integer_value, response_time, resolution_time)
+TEST_TICKET_PRIORITIES = {
+    "Urgent": (100, 60 * 30, 60 * 60 * 2),
+    "High": (200, 60 * 60 * 1, 60 * 60 * 4),
+    "Medium": (300, 60 * 60 * 8, 60 * 60 * 24),
+    "Low": (400, 60 * 60 * 24, 60 * 60 * 72),
+}
+
 
 def before_tests():
     frappe.db.set_single_value("HD Settings", "skip_email_workflow", 0)  # nosemgrep
@@ -25,8 +37,11 @@ def before_tests():
     )  # nosemgrep
     frappe.db.set_single_value("HD Settings", "default_priority", None)
     # frappe.flags.mute_emails = True
+    make_test_ticket_priorities()
+    add_test_priorities_to_sla("Default")
     make_holiday_list()
     make_new_sla()
+    drop_test_email_accounts()
     make_test_objects("Email Domain", reset=True)
     create_email_account()
     create_customer_field()
@@ -52,52 +67,97 @@ def make_new_sla():
         )
         sla_doc.append("support_and_resolution", service_day)
 
-    low_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "Low",
-            "response_time": 60 * 60 * 24,
-            "resolution_time": 60 * 60 * 72,
-        }
-    )
-
-    medium_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 1,
-            "priority": "Medium",
-            "response_time": 60 * 60 * 8,
-            "resolution_time": 60 * 60 * 24,
-        }
-    )
-
-    high_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "High",
-            "response_time": 60 * 60 * 1,
-            "resolution_time": 60 * 60 * 4,
-        }
-    )
-
-    urgent_priority = frappe.get_doc(
-        {
-            "doctype": "HD Service Level Priority",
-            "default_priority": 0,
-            "priority": "Urgent",
-            "response_time": 60 * 30,
-            "resolution_time": 60 * 60 * 2,
-        }
-    )
     sla_doc.priorities = []
-    sla_doc.append("priorities", low_priority)
-    sla_doc.append("priorities", medium_priority)
-    sla_doc.append("priorities", high_priority)
-    sla_doc.append("priorities", urgent_priority)
+    for priority, (_weight, response, resolution) in TEST_TICKET_PRIORITIES.items():
+        sla_doc.append(
+            "priorities",
+            {
+                "doctype": "HD Service Level Priority",
+                "default_priority": 1 if priority == "Medium" else 0,
+                "priority": priority,
+                "response_time": response,
+                "resolution_time": resolution,
+            },
+        )
 
     sla_doc.save()
+
+
+def drop_test_email_accounts():
+    """Remove the email accounts a previous run left behind.
+
+    Resetting the test Email Domain records saves every account already bound
+    to those domains, and re-creates one of the accounts in the same pass. That
+    reads an account before the earlier save of it has landed, which fails on
+    the timestamp check, so the run starts from no accounts at all.
+    """
+    for name in ("_Test Email Account 1", "_Test Comm Account 1", "Test"):
+        frappe.delete_doc_if_exists("Email Account", name, force=1)
+
+
+def ignored_test_record_dependencies(doctype: str) -> list[str]:
+    """Link targets the test record generator must not walk into.
+
+    Generation walks link fields depth first and imports the test module of
+    every doctype it reaches. On a site that also has ERPNext installed that
+    walk leaves Helpdesk, either directly through a custom field or through
+    Contact and its Address, and reaches ERPNext test modules which build
+    companies, items and stock entries on the site under test. No Helpdesk test
+    uses any of those records.
+    """
+    meta = frappe.get_meta(doctype)
+    link_fields = list(meta.get_link_fields())
+    for df in meta.get_table_fields():
+        link_fields.extend(frappe.get_meta(df.options).get_link_fields())
+
+    targets = {
+        df.options for df in link_fields if df.options and df.options != "[Select]"
+    }
+    ignored = targets & {"Contact", "Address"}
+    for target in targets:
+        module = frappe.db.get_value("DocType", target, "module")
+        app = frappe.db.get_value("Module Def", module, "app_name")
+        if app not in ("frappe", "helpdesk"):
+            ignored.add(target)
+
+    return sorted(ignored)
+
+
+def make_test_ticket_priorities():
+    """Create the priorities the test suite is written against, if the site does
+    not already have them."""
+    for priority, (weight, _response, _resolution) in TEST_TICKET_PRIORITIES.items():
+        if frappe.db.exists("HD Ticket Priority", priority):
+            continue
+        doc = frappe.new_doc("HD Ticket Priority")
+        doc.name = priority
+        doc.integer_value = weight
+        doc.insert()
+
+
+def add_test_priorities_to_sla(sla_name: str):
+    """Make an existing SLA answer for the test priorities too, leaving the
+    priorities it already carries (and its default one) alone."""
+    sla_doc = frappe.get_doc("HD Service Level Agreement", sla_name)
+    existing = {p.priority for p in sla_doc.priorities}
+    missing = [p for p in TEST_TICKET_PRIORITIES if p not in existing]
+    if not missing:
+        return sla_doc
+
+    for priority in missing:
+        _weight, response, resolution = TEST_TICKET_PRIORITIES[priority]
+        sla_doc.append(
+            "priorities",
+            {
+                "doctype": "HD Service Level Priority",
+                "default_priority": 0,
+                "priority": priority,
+                "response_time": response,
+                "resolution_time": resolution,
+            },
+        )
+    sla_doc.save()
+    return sla_doc
 
 
 def make_holiday_list():
@@ -116,12 +176,21 @@ def make_holiday_list():
 
 
 def make_sla(sla_name: str = "Test SLA", condition: str = ""):
+    # Inserting with ignore_if_duplicate would skip the parent but still insert
+    # a fresh set of child rows, so an existing SLA is reused instead.
+    if frappe.db.exists("HD Service Level Agreement", sla_name):
+        sla_doc = frappe.get_doc("HD Service Level Agreement", sla_name)
+        sla_doc.condition = condition
+        sla_doc.enabled = 1
+        sla_doc.save(ignore_permissions=True)
+        return sla_doc
+
     def_sla = frappe.get_doc("HD Service Level Agreement", "Default")
     sla_doc = frappe.copy_doc(def_sla)
     sla_doc.service_level = sla_name
     sla_doc.condition = condition
     sla_doc.default_sla = 0
-    sla_doc.insert(ignore_if_duplicate=True, ignore_permissions=True)
+    sla_doc.insert(ignore_permissions=True)
     return sla_doc
 
 
@@ -500,6 +569,11 @@ def make_team(team_name, members=[], disabled=False):
     """Create an HD Team with optional members. A default agent is created if no members are provided."""
     if not members:
         members = [make_agent("default_team_agent@example.com")]
+
+    # An HD Team owns an assignment rule, and applying it caches the rule name
+    # against HD Ticket. The rollback that ends a test drops the rule but not
+    # the cache, so a later suite fails with "Assignment Rule not found".
+    frappe.db.after_rollback.add(lambda: clear_doctype_map("Assignment Rule"))
 
     if frappe.db.exists("HD Team", team_name):
         team = frappe.get_doc("HD Team", team_name)
