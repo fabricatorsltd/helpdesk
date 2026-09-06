@@ -2,6 +2,8 @@
 
 A ticket parked in the waiting-for-customer status after an agent reply gets one
 reminder mail; if the customer still says nothing it is closed with a notice.
+Both delays are counted in working days on the ticket's own SLA calendar, so a
+day that SLA does not run on never counts against the customer.
 Both mails are filed on the thread as automated messages, so they never pass for
 the agent reply the countdown is measured from, and they do not reopen or
 otherwise touch the ticket (see HDTicket.on_communication_update).
@@ -48,7 +50,11 @@ def run():
         return
 
     # Cutoffs in the system timezone, to match how communication_date is stored
-    # (same reasoning as close_tickets_after_n_days).
+    # (same reasoning as close_tickets_after_n_days). They are counted in
+    # calendar days here only to prefilter: N working days always span at least
+    # N calendar days, so a calendar cutoff can only select more tickets than
+    # the SLA calendar would. Each candidate is measured again against its own
+    # SLA in handle_ticket.
     now = now_datetime()
     reminder_cutoff = add_to_date(now, days=-reminder_days)
     # The closure is counted from the reminder, not from the agent reply: a
@@ -60,7 +66,7 @@ def run():
 
     for candidate in get_candidates(status, reminder_cutoff, grace_cutoff):
         try:
-            handle_ticket(candidate, status, grace_cutoff, grace_days, close_days)
+            handle_ticket(candidate, status, now, reminder_days, grace_days, close_days)
         except Exception as e:
             # roll back first: an Error Log written inside the failed transaction
             # would be rolled back with it, and the failure would go unrecorded
@@ -84,11 +90,13 @@ def get_candidates(status, reminder_cutoff, grace_cutoff):
     the customer, and never matches.
 
     Two shapes qualify: not warned yet and silent since the reminder threshold,
-    or warned long enough ago to be closed.
+    or warned long enough ago to be closed. Both thresholds are the calendar-day
+    prefilter, narrowed again per ticket by its SLA calendar.
     """
     return frappe.db.sql(
         """
-            SELECT t.name, t.fab_inactivity_reminder_on, latest_comm.last_sent_date
+            SELECT t.name, t.sla, t.fab_inactivity_reminder_on,
+                latest_comm.last_sent_date
             FROM `tabHD Ticket` t
             INNER JOIN (
                 SELECT reference_name,
@@ -120,13 +128,35 @@ def get_candidates(status, reminder_cutoff, grace_cutoff):
     )
 
 
-def handle_ticket(candidate, status, grace_cutoff, grace_days, close_days):
+def handle_ticket(candidate, status, now, reminder_days, grace_days, close_days):
     if not candidate.fab_inactivity_reminder_on:
-        send_reminder(candidate, status, grace_days)
+        if candidate.last_sent_date < shift_working_days(
+            candidate, now, -reminder_days
+        ):
+            send_reminder(candidate, status, grace_days)
         return
 
-    if candidate.fab_inactivity_reminder_on < grace_cutoff:
+    if candidate.fab_inactivity_reminder_on < shift_working_days(
+        candidate, now, -grace_days
+    ):
         close_ticket(candidate, status, close_days)
+
+
+def shift_working_days(candidate, date_time, days):
+    """Move `date_time` by `days` working days on the ticket's SLA calendar.
+
+    A ticket with no SLA, or one whose SLA declares no workday, has no calendar
+    to read and falls back to calendar days: never reminding it would quietly
+    turn the feature off for it, and assuming Monday to Friday would hardcode
+    the very week this is supposed to take from the SLA.
+    """
+    if not candidate.sla or not frappe.db.exists(
+        "HD Service Level Agreement", candidate.sla
+    ):
+        return add_to_date(date_time, days=days, as_datetime=True)
+
+    sla = frappe.get_cached_doc("HD Service Level Agreement", candidate.sla)
+    return sla.shift_working_days(date_time, days)
 
 
 def still_waiting(ticket, candidate, status):
@@ -146,7 +176,7 @@ def send_reminder(candidate, status, grace_days):
     if not still_waiting(ticket, candidate, status):
         return
 
-    close_on = add_to_date(now_datetime(), days=grace_days)
+    close_on = shift_working_days(candidate, now_datetime(), grace_days)
 
     # the ticket tag closes the subject, like agent replies, so a customer
     # answer without usable threading headers still lands on this ticket

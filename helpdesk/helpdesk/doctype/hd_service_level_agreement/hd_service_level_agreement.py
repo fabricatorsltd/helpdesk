@@ -476,6 +476,40 @@ class HDServiceLevelAgreement(Document):
 
         return total_seconds
 
+    def shift_working_days(self, date_time, days: int):
+        """
+        Move `date_time` by `days` working days, keeping the time of day.
+
+        Days the SLA does not work on, and the holidays it declares, are stepped
+        over without being counted. A negative `days` walks backwards. An SLA
+        with no workday configured has no calendar to follow, so it falls back
+        to plain calendar days.
+
+        Unlike `calc_time`, this counts whole days rather than working seconds.
+
+        :param date_time: Start datetime
+        :param days: Working days to move by, negative to go back
+        :return: DateTime `days` working days away from `date_time`
+        """
+        result = get_datetime(date_time)
+        workdays = self.get_workdays()
+        if not days or not workdays:
+            return add_to_date(result, days=days, as_datetime=True)
+
+        holidays = set(self.get_holidays())
+        days_list = get_weekdays()
+        step = 1 if days > 0 else -1
+        remaining = abs(days)
+
+        while remaining:
+            result = add_to_date(result, days=step, as_datetime=True)
+            if getdate(result) in holidays:
+                continue
+            if days_list[result.weekday()] not in workdays:
+                continue
+            remaining -= 1
+        return result
+
     def get_holidays(self):
         res = []
         if not self.holiday_list:
