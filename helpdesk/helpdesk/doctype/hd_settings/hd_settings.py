@@ -22,6 +22,7 @@ class HDSettings(Document):
     def validate(self):
         self.validate_auto_close_days()
         self.validate_inactivity_days()
+        self.validate_digest_hour()
         self.validate_email_contents()
         self.validate_send_feedback_when_ticket_closed()
 
@@ -49,6 +50,15 @@ class HDSettings(Document):
             frappe.throw(
                 _("The waiting for customer status must be of <u>Paused</u> category.")
             )
+
+    def validate_digest_hour(self):
+        # fields created by fab_helpdesk (see ensure_digest_fields): absent on a
+        # plain helpdesk site, where there is nothing to validate.
+        if not self.get("fab_digest_enabled"):
+            return
+        hour = cint(self.get("fab_digest_hour"))
+        if hour < 0 or hour > 23:
+            frappe.throw(_("The digest hour must be between 0 and 23"))
 
     def validate_send_feedback_when_ticket_closed(self):
         if not self.enable_email_ticket_feedback:

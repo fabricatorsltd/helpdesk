@@ -244,6 +244,43 @@
           </div>
         </div>
       </div>
+      <div>
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col gap-1">
+            <span class="text-base-medium text-ink-gray-8">{{
+              __("Daily digest of open tickets")
+            }}</span>
+            <span class="text-p-sm text-ink-gray-6">{{
+              __(
+                "Email every agent the tickets still open, on weekday mornings in their own timezone."
+              )
+            }}</span>
+          </div>
+          <Switch v-model="settingsData.digestEnabled" />
+        </div>
+        <div
+          class="grid grid-cols-3 gap-4 mt-3"
+          v-if="settingsData.digestEnabled"
+        >
+          <div class="flex flex-col gap-1.5">
+            <FormControl
+              :label="__('Send at (Hour)')"
+              placeholder="e.g. 8"
+              v-model="settingsData.digestHour"
+              type="number"
+              :debounce="300"
+            />
+            <ErrorMessage
+              :message="
+                Number(settingsData.digestHour) < 0 ||
+                Number(settingsData.digestHour) > 23
+                  ? __('The hour must be between 0 and 23')
+                  : ''
+              "
+            />
+          </div>
+        </div>
+      </div>
       <div class="flex flex-col gap-2">
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
