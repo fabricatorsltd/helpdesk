@@ -127,6 +127,17 @@ class TestAgentDigest(FrappeTestCase):
     def test_selects_by_status_category_not_by_the_status_label(self):
         """A paused ticket is not open however its status is labelled, and a
         renamed Open-category status still counts."""
+        # the first half asserts that nothing goes out, so the whole site has to
+        # be quiet: a ticket another test left open would keep the digest alive
+        # and the assertion would depend on the order the suite happens to run in
+        for name in frappe.get_all(
+            "HD Ticket",
+            filters={"status_category": "Open", "name": ("!=", self.ticket.name)},
+            pluck="name",
+        ):
+            frappe.db.set_value(
+                "HD Ticket", name, {"status": "Replied", "status_category": "Paused"}
+            )
         frappe.db.set_value(
             "HD Ticket",
             self.ticket.name,
