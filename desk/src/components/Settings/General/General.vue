@@ -107,6 +107,8 @@ const settingsData = ref({
   inactivityStatus: "",
   inactivityReminderDays: "",
   inactivityCloseDays: "",
+  digestEnabled: false,
+  digestHour: "",
 });
 const disableSignup = ref(false);
 
@@ -171,6 +173,8 @@ const saveSettingsResource = createResource({
         fab_inactivity_close_days: Number(
           settingsData.value.inactivityCloseDays
         ),
+        fab_digest_enabled: settingsData.value.digestEnabled,
+        fab_digest_hour: Number(settingsData.value.digestHour),
       },
     };
   },
@@ -211,6 +215,8 @@ const transformData = (data: any) => {
     inactivityStatus: data.fab_inactivity_status,
     inactivityReminderDays: data.fab_inactivity_reminder_days,
     inactivityCloseDays: data.fab_inactivity_close_days,
+    digestEnabled: Boolean(data.fab_digest_enabled),
+    digestHour: data.fab_digest_hour,
   };
 };
 

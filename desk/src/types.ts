@@ -681,6 +681,8 @@ export interface HDSettings {
   inactivityStatus: string;
   inactivityReminderDays: string;
   inactivityCloseDays: string;
+  digestEnabled: boolean;
+  digestHour: string;
 }
 
 export interface HolidayList {

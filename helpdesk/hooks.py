@@ -41,6 +41,7 @@ scheduler_events = {
         "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days",
         "helpdesk.helpdesk.doctype.hd_ticket.inactivity.run",
     ],
+    "hourly": ["helpdesk.helpdesk.doctype.hd_ticket.digest.run"],
     "hourly_long": [
         "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.update_sla_status_in_ticket"
     ],
