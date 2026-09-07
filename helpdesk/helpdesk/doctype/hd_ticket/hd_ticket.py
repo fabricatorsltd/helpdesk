@@ -31,6 +31,7 @@ from helpdesk.helpdesk.doctype.hd_ticket_activity.hd_ticket_activity import (
 from helpdesk.helpdesk.utils.email import (
     default_outgoing_email_account,
     default_ticket_outgoing_email_account,
+    helpdesk_outgoing_email_account,
 )
 from helpdesk.utils import (
     capture_event,
@@ -561,15 +562,18 @@ class HDTicket(Document):
         return bool(int(skip))
 
     def _resolve_sender_email(self, email_account_name, from_email_id):
-        if not email_account_name:
-            sender_email = self.sender_email()
-            return sender_email, (sender_email.name if sender_email else None)
+        """The support mailbox, always.
 
-        if not frappe.db.exists("Email Account", email_account_name):
-            frappe.throw(_("No Email Account found for {0}").format(from_email_id))
+        The account the composer asks for is ignored on purpose. A ticket reply
+        speaks for the helpdesk, so it cannot leave from an agent's personal
+        Email Account (billing, jobs, anything else that happens to sit on their
+        User record), which is what the caller would otherwise be free to pick.
+        """
+        sender_email = helpdesk_outgoing_email_account()
+        if not sender_email:
+            frappe.throw(_("No outgoing Email Account is configured for the helpdesk"))
 
-        sender_email = frappe._dict(name=email_account_name, email_id=from_email_id)
-        return sender_email, email_account_name
+        return sender_email, sender_email.name
 
     def instantly_send_email(self):
         check: str = (
@@ -741,6 +745,9 @@ class HDTicket(Document):
             sender_email, email_account_name = self._resolve_sender_email(
                 email_account_name, from_email_id
             )
+            # the address on the thread has to match the mailbox it actually left
+            # from, or the customer replies to a mailbox that never sent it
+            sender = sender_email.email_id or sender
 
         if recipients == "Administrator":
             recipients = frappe.get_value("User", "Administrator", "email")

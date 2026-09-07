@@ -1,5 +1,6 @@
 import frappe
 
+from helpdesk.helpdesk.utils.email import helpdesk_outgoing_email_account
 from helpdesk.utils import agent_only, get_agent_name, get_agents_team
 from helpdesk.utils import is_agent as _is_agent
 
@@ -85,26 +86,15 @@ def get_current_user_email_info():
     email_signature, email = frappe.db.get_value(
         "User", user, ["email_signature", "email"]
     )
-    user_emails = frappe.db.get_all(
-        "User Email",
-        filters={"parent": user},
-        fields=["email_account", "email_id"],
+    # A ticket reply always leaves from the support mailbox, so the composer is
+    # offered that one account and nothing else. Listing the agent's personal
+    # Email Accounts here let a reply go out as billing or as any other mailbox
+    # that happened to sit on their User record.
+    account = helpdesk_outgoing_email_account()
+    outgoing_emails = (
+        [{"email_account": account.name, "email_id": account.email_id}] if account else []
     )
-    outgoing_account_names = frappe.db.get_all(
-        "Email Account",
-        filters={"enable_outgoing": 1},
-        pluck="name",
-    )
-
-    outgoing_emails = [
-        row for row in user_emails if row.email_account in outgoing_account_names
-    ]
-
-    available_emails = frappe.db.get_all(
-        "Email Account",
-        filters={"enable_outgoing": 1},
-        fields=["name", "email_id"],
-    )
+    available_emails = list(outgoing_emails)
 
     return {
         "email_signature": email_signature,

@@ -39,3 +39,14 @@ def default_ticket_outgoing_email_account():
     )
 
     return query_get_one(r)
+
+
+def helpdesk_outgoing_email_account():
+    """The one account a ticket reply is allowed to leave from.
+
+    A reply is the helpdesk speaking to a customer, not the agent writing from
+    their own desk: it must always go out from the support mailbox, whatever
+    personal Email Accounts the agent happens to carry on their User record, and
+    whatever account an earlier reply went out from by mistake.
+    """
+    return default_ticket_outgoing_email_account() or default_outgoing_email_account()

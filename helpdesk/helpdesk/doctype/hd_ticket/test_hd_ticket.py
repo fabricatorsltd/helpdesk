@@ -15,6 +15,7 @@ from helpdesk.helpdesk.doctype.hd_ticket.api import (
     split_ticket,
 )
 from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import close_tickets_after_n_days
+from helpdesk.helpdesk.utils.email import helpdesk_outgoing_email_account
 from helpdesk.test_utils import (
     add_comment,
     add_contact_in_customer,
@@ -1366,8 +1367,12 @@ class TestHDTicket(FrappeTestCase):
             # resolution_failed_by should be 15 minutes (in business hours seconds)
             self.assertEqual(ticket.resolution_failed_by, 15 * 60)
 
-    def test_reply_via_agent_default_sender(self):
-        """Without `from_email`, sender on the Communication is the session user."""
+    def test_reply_via_agent_always_sends_from_the_helpdesk_mailbox(self):
+        """A reply speaks for the helpdesk, so it leaves from the support mailbox.
+
+        Not from the agent, whose own address is not a mailbox we can send from,
+        and not from whatever personal Email Account sits on their User record.
+        """
         ticket = make_ticket()
 
         frappe.set_user(agent)
@@ -1376,14 +1381,22 @@ class TestHDTicket(FrappeTestCase):
         finally:
             frappe.set_user("Administrator")
 
+        account = helpdesk_outgoing_email_account()
         comm = frappe.get_last_doc(
             "Communication",
             filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
         )
-        self.assertEqual(comm.sender, agent)
+        self.assertEqual(comm.sender, account.email_id)
+        self.assertEqual(comm.email_account, account.name)
+        self.assertNotEqual(comm.sender, agent)
 
-    def test_reply_via_agent_with_from_email(self):
-        """When `from_email` is passed, the Communication uses it as sender/email_account."""
+    def test_reply_via_agent_ignores_the_requested_from_email(self):
+        """Another outgoing account may be asked for, and is refused.
+
+        The composer used to offer the agent's own Email Accounts, which let a
+        ticket reply go out as billing or as any other mailbox that happened to
+        be on their User record.
+        """
         email_account = frappe.get_doc(
             {
                 "doctype": "Email Account",
@@ -1409,29 +1422,37 @@ class TestHDTicket(FrappeTestCase):
         finally:
             frappe.set_user("Administrator")
 
+        account = helpdesk_outgoing_email_account()
         comm = frappe.get_last_doc(
             "Communication",
             filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
         )
-        self.assertEqual(comm.sender, email_account.email_id)
-        self.assertEqual(comm.email_account, email_account.name)
+        self.assertEqual(comm.sender, account.email_id)
+        self.assertEqual(comm.email_account, account.name)
+        self.assertNotEqual(comm.email_account, email_account.name)
 
-    def test_reply_via_agent_with_invalid_from_email_account(self):
-        """If `from_email.email_account` does not exist, reply_via_agent should throw."""
+    def test_reply_via_agent_ignores_an_email_account_that_does_not_exist(self):
+        """A stale account name from the composer no longer stops the reply."""
         ticket = make_ticket()
 
         frappe.set_user(agent)
         try:
-            with self.assertRaises(frappe.ValidationError):
-                ticket.reply_via_agent(
-                    message="Reply with bad email account",
-                    from_email={
-                        "email_id": "invalid@test.com",
-                        "email_account": "Invalid Email Account",
-                    },
-                )
+            ticket.reply_via_agent(
+                message="Reply with bad email account",
+                from_email={
+                    "email_id": "invalid@test.com",
+                    "email_account": "Invalid Email Account",
+                },
+            )
         finally:
             frappe.set_user("Administrator")
+
+        account = helpdesk_outgoing_email_account()
+        comm = frappe.get_last_doc(
+            "Communication",
+            filters={"reference_doctype": "HD Ticket", "reference_name": ticket.name},
+        )
+        self.assertEqual(comm.sender, account.email_id)
 
     def test_bulk_reply(self):
         """
