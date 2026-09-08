@@ -53,9 +53,12 @@
         </Tooltip>
       </div>
       <!-- divider -->
-      <div class="border-l border-outline-gray-2 h-[13px]" />
-      <!-- Resolution by -->
-      <div class="flex items-center gap-1">
+      <div
+        v-if="ticket.doc.resolution_by"
+        class="border-l border-outline-gray-2 h-[13px]"
+      />
+      <!-- Resolution by, only when the SLA commits to one -->
+      <div v-if="ticket.doc.resolution_by" class="flex items-center gap-1">
         <span>{{ __("Resolution") }} </span>
         <Tooltip
           :text="dateFormat(resolutionBy.date, dateTooltipFormat)"

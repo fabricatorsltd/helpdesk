@@ -278,6 +278,11 @@ class HDServiceLevelAgreement(Document):
         )
 
     def set_resolution_by(self, doc: Document):
+        if not self.apply_sla_for_resolution:
+            # a zero resolution time would otherwise land on the creation
+            # instant and show the ticket as overdue from the first second
+            doc.resolution_by = None
+            return
         total_hold_time = doc.total_hold_time or 0
         start = add_to_date(
             doc.service_level_agreement_creation,
