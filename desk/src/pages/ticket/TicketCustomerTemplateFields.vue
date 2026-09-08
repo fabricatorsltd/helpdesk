@@ -83,7 +83,8 @@ const slaData = computed(() => {
       : "Failed";
 
   //TODO: no resolution date for unclassified tickets, configurable?
-  if (ticket.data.priority === "Unclassified") {
+  // No resolution row either when the SLA does not commit to a target
+  if (ticket.data.priority === "Unclassified" || !ticket.data.resolution_by) {
     return [
       {
         title: "Expected First Response",

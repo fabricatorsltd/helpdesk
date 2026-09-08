@@ -26,18 +26,32 @@ class TestHDServiceLevelAgreement(FrappeTestCase):
         self.assertEqual(ticket.sla, SLA_PRIORITY_NAME)
 
     def test_sla_without_resolution_sets_no_resolution_target(self):
-        sla = make_sla("Response Only SLA", "doc.priority == 'Low'").reload()
+        # Medium matches no other conditional SLA, so this one must win
+        sla = make_sla("Response Only SLA", "doc.priority == 'Medium'").reload()
         sla.apply_sla_for_resolution = 0
         sla.save(ignore_permissions=True)
         self.addCleanup(
             frappe.db.set_value, "HD Service Level Agreement", sla.name, "enabled", 0
         )
 
-        ticket = make_ticket(priority="Low")
+        ticket = make_ticket(priority="Medium")
         self.assertEqual(ticket.sla, sla.name)
         self.assertTrue(ticket.response_by)
         self.assertIsNone(ticket.resolution_by)
         self.assertEqual(ticket.agreement_status, "First Response Due")
+
+        # a replied and then resolved ticket must not be failed against a
+        # resolution target it never had
+        ticket.reload()
+        ticket.status = "Replied"
+        ticket.save()
+
+        ticket.reload()
+        ticket.status = "Resolved"
+        ticket.save()
+        self.assertIsNone(ticket.resolution_by)
+        self.assertIsNone(ticket.resolution_failed_by)
+        self.assertEqual(ticket.agreement_status, "Fulfilled")
 
     def test_blank_condition_sla_is_not_a_false_positive(self):
         # An enabled, non-default SLA with a blank ("" or NULL) condition

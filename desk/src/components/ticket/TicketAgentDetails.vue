@@ -152,15 +152,20 @@ const sections = computed(() => [
     badgeText: firstResponseBadge.value.label,
     badgeColor: firstResponseBadge.value.color,
   },
-  {
-    label: __("Resolution"),
-    tooltipValue: dateFormat(
-      props.ticket.resolution_date || props.ticket.resolution_by,
-      dateTooltipFormat
-    ),
-    badgeText: resolutionBadge.value.label,
-    badgeColor: resolutionBadge.value.color,
-  },
+  // Resolution, only when the SLA commits to a target
+  ...(props.ticket.resolution_by
+    ? [
+        {
+          label: __("Resolution"),
+          tooltipValue: dateFormat(
+            props.ticket.resolution_date || props.ticket.resolution_by,
+            dateTooltipFormat
+          ),
+          badgeText: resolutionBadge.value.label,
+          badgeColor: resolutionBadge.value.color,
+        },
+      ]
+    : []),
   {
     label: __("Source"),
     value: props.ticket.via_customer_portal ? __("Portal") : __("Mail"),

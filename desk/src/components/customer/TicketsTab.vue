@@ -119,7 +119,11 @@
 
               <!-- Resolution -->
               <div v-if="!isMobileView" class="text-ink-gray-6">
-                {{ dayjsLocal(ticket.resolution_by).fromNow() }}
+                {{
+                  ticket.resolution_by
+                    ? dayjsLocal(ticket.resolution_by).fromNow()
+                    : ""
+                }}
               </div>
 
               <!-- Assigned To -->

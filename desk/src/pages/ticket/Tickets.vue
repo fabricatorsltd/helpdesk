@@ -259,6 +259,10 @@ function handleResponseByField(row: any, item: string) {
 }
 
 function handleResolutionByField(row: any, item: string) {
+  // Nothing to show when the SLA does not commit to a resolution target.
+  if (!item) {
+    return h("span");
+  }
   const status = getStatus(row.status) || {};
   if (status.category === "Paused") {
     return h(Badge, {

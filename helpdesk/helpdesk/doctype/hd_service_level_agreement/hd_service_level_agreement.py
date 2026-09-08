@@ -230,6 +230,10 @@ class HDServiceLevelAgreement(Document):
         time_took_effective = max(time_took - time_hold, 0)
         doc.resolution_time = time_took_effective
 
+        # nothing to fail against when the SLA does not commit to a resolution
+        if not doc.resolution_by:
+            return
+
         # if resolution is failed calculate by how much time it is failed in business hours
         if get_datetime(doc.resolution_date) > get_datetime(doc.resolution_by):
             start_at = doc.resolution_by

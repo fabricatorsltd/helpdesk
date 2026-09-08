@@ -131,21 +131,25 @@ const ticket = inject(ITicket);
 
 const slaData = computed(() => {
   const firstResponse = firstResponseData();
-  const resolution = resolutionData();
-  return [
+  const rows = [
     {
       title: "First Response",
       value: ticket.data.first_responded_on || ticket.data.response_by,
       label: firstResponse.label,
       theme: firstResponse.color,
     },
-    {
+  ];
+  // Resolution, only when the SLA commits to a target
+  if (ticket.data.resolution_by) {
+    const resolution = resolutionData();
+    rows.push({
       title: "Resolution",
       value: ticket.data.resolution_date || ticket.data.resolution_by,
       label: resolution.label,
       theme: resolution.color,
-    },
-  ];
+    });
+  }
+  return rows;
 });
 
 function firstResponseData() {
