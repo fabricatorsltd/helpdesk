@@ -26,7 +26,8 @@ class HelpdeskAssignmentRule(AssignmentRule):
         Override get_user method from framework.
         always Active agents are preferred; fall back to Away if no Active is available;
         fall back to the full pool (including Unavailable) only if no one else
-        is available, so the ticket is never left unassigned.
+        is available, so the ticket is never left unassigned while the rule
+        has someone to pick from. A rule with no users assigns nobody.
         """
 
         # "Based on Field" assigns through the document field, so the
@@ -39,8 +40,9 @@ class HelpdeskAssignmentRule(AssignmentRule):
             return super().get_user(doc)
 
         original_pool = getattr(self, user_pool_fieldname)
-        # a team without members has a rule without users: the framework
-        # indexes into the empty list and the whole save fails with a 500
+        # the installer seeds the default teams without members, and removing
+        # the last member empties the rule too: the framework indexes into the
+        # empty list and the whole save fails with a 500
         if not original_pool:
             return None
 

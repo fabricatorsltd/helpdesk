@@ -121,6 +121,8 @@ class TestHDTeam(FrappeTestCase):
 
         ticket = make_ticket("Ticket for an empty team")
         ticket.reload()
+        # the rule only fires on open tickets: keep the test on that path
+        self.assertEqual(ticket.status, "Open")
         ticket.agent_group = team.name
         ticket.save(ignore_permissions=True)
 
