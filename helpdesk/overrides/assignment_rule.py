@@ -29,11 +29,6 @@ class HelpdeskAssignmentRule(AssignmentRule):
         is available, so the ticket is never left unassigned.
         """
 
-        away = get_agents_by_category("Away")
-        unavailable = get_agents_by_category("Unavailable")
-        if not away and not unavailable:
-            return super().get_user(doc)
-
         # "Based on Field" assigns through the document field, so the
         # availability filter does not apply.
         if self.rule == "Weighted Distribution":
@@ -44,6 +39,16 @@ class HelpdeskAssignmentRule(AssignmentRule):
             return super().get_user(doc)
 
         original_pool = getattr(self, user_pool_fieldname)
+        # a team without members has a rule without users: the framework
+        # indexes into the empty list and the whole save fails with a 500
+        if not original_pool:
+            return None
+
+        away = get_agents_by_category("Away")
+        unavailable = get_agents_by_category("Unavailable")
+        if not away and not unavailable:
+            return super().get_user(doc)
+
         active_only = [
             u for u in original_pool if u.user not in away and u.user not in unavailable
         ]

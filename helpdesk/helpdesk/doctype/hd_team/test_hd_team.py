@@ -2,6 +2,7 @@
 # See license.txt
 
 import frappe
+from frappe.cache_manager import clear_doctype_map
 from frappe.tests.utils import FrappeTestCase
 
 from helpdesk.test_utils import make_agent, make_team, make_ticket
@@ -110,6 +111,22 @@ class TestHDTeam(FrappeTestCase):
         self.assertIn(agent1, ar_weighted)
         self.assertIn(agent3, ar_weighted)
         self.assertNotIn(agent2, ar_weighted)
+
+    def test_ticket_moves_to_a_team_without_members(self):
+        # the default teams are seeded this way by the installer
+        frappe.db.after_rollback.add(lambda: clear_doctype_map("Assignment Rule"))
+        team = frappe.get_doc({"doctype": "HD Team", "team_name": "Test Empty Team"})
+        team.insert(ignore_mandatory=True, ignore_permissions=True)
+        self.assertFalse(frappe.get_doc("Assignment Rule", team.assignment_rule).users)
+
+        ticket = make_ticket("Ticket for an empty team")
+        ticket.reload()
+        ticket.agent_group = team.name
+        ticket.save(ignore_permissions=True)
+
+        ticket.reload()
+        self.assertEqual(ticket.agent_group, team.name)
+        self.assertFalse(ticket.get_assigned_users())
 
     def test_assignment_rule_enabled_disabled(self):
         team = make_team("Test AR Enable Disable")
