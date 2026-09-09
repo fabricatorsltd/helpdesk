@@ -71,12 +71,26 @@
                 v-if="field.visible"
                 :key="field.fieldname"
                 :field="field"
-                :value="field.value"
+                :value="getDraftValue(field)"
                 @change="
-                  ({ fieldname, value }) => handleFieldUpdate(fieldname, value)
+                  ({ fieldname, value }) => handleDraftUpdate(fieldname, value)
                 "
               />
             </template>
+            <div v-if="isDirty" class="flex items-center gap-2 pt-2">
+              <Button
+                variant="solid"
+                :label="__('Save')"
+                :loading="isSaving"
+                @click="saveDraft"
+              />
+              <Button
+                variant="ghost"
+                :label="__('Discard')"
+                :disabled="isSaving"
+                @click="discardDraft"
+              />
+            </div>
           </div>
         </Section>
       </div>
@@ -156,8 +170,9 @@ import {
   TicketSymbol,
 } from "@/types";
 import { useStorage } from "@vueuse/core";
-import { dayjs, Tooltip } from "frappe-ui";
-import { computed, inject, ref } from "vue";
+import { dayjs, toast, Tooltip } from "frappe-ui";
+import { computed, inject, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import LucideChevronRight from "~icons/lucide/chevron-right";
 import Section from "../Section.vue";
 import TicketField from "../TicketField.vue";
@@ -339,6 +354,83 @@ function handleFieldUpdate(
     //show error toast
   );
 }
+
+// Ticket Info edits stay local until saved, so that one field's save cannot
+// overwrite what is being typed in another one.
+const draft = ref<Record<string, FieldValue>>({});
+const isSaving = ref(false);
+
+const dirtyFields = computed(() =>
+  Object.keys(draft.value).filter(
+    (fieldname) =>
+      normalize(draft.value[fieldname]) !==
+      normalize(ticket.value.doc?.[fieldname])
+  )
+);
+
+const isDirty = computed(() => Boolean(dirtyFields.value.length));
+
+// An untouched field always renders the doc value, so a realtime update lands on
+// it by itself; drop the draft entries the incoming doc has caught up with.
+watch(
+  () => ticket.value.doc,
+  () => {
+    Object.keys(draft.value).forEach((fieldname) => {
+      if (
+        normalize(draft.value[fieldname]) ===
+        normalize(ticket.value.doc?.[fieldname])
+      ) {
+        delete draft.value[fieldname];
+      }
+    });
+  }
+);
+
+function getDraftValue(field) {
+  return field.fieldname in draft.value
+    ? draft.value[field.fieldname]
+    : field.value;
+}
+
+function handleDraftUpdate(fieldname: string, value: FieldValue) {
+  if (normalize(ticket.value.doc?.[fieldname]) === normalize(value)) {
+    delete draft.value[fieldname];
+    return;
+  }
+  draft.value[fieldname] = value;
+}
+
+function discardDraft() {
+  draft.value = {};
+}
+
+function saveDraft() {
+  if (!isDirty.value || isSaving.value) return;
+  const values = Object.fromEntries(
+    dirtyFields.value.map((fieldname) => [fieldname, draft.value[fieldname]])
+  );
+  isSaving.value = true;
+  ticket.value.setValue.submit(values, {
+    onSuccess: () => {
+      isSaving.value = false;
+      draft.value = {};
+      activities.value.reload();
+    },
+    onError: (err: any) => {
+      isSaving.value = false;
+      toast.error(
+        err?.messages?.[0] || err?.message || __("Failed to save ticket info.")
+      );
+    },
+  });
+}
+
+onBeforeRouteLeave(() => {
+  if (!isDirty.value) return true;
+  return window.confirm(
+    __("You have unsaved changes in Ticket Info. Leave anyway?")
+  );
+});
 
 const fieldRefs = ref<Record<string, any>>({});
 
