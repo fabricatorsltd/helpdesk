@@ -1163,6 +1163,19 @@ class HDTicket(Document):
         if sla := frappe.get_last_doc("HD Service Level Agreement", {"name": self.sla}):
             sla.apply(self)
 
+    def close_silently(self):
+        """Close on the system's own initiative, with no feedback mail.
+
+        ``ignore_validate`` skips before_save, and with it the feedback mail there is
+        nothing to rate for. It also skips ``apply_sla``, which would leave the ticket
+        on hold forever and shown as overdue: the SLA bookkeeping is run by hand.
+        """
+        self.status = "Closed"
+        self.load_doc_before_save()
+        self.apply_sla()
+        self.flags.ignore_validate = True
+        self.save(ignore_permissions=True)
+
     def get_sla(self):
         return frappe.get_doc("HD Service Level Agreement", {"name": self.sla})
 
@@ -1760,10 +1773,8 @@ def close_tickets_after_n_days():
     # cant do set_value because SLA will not be applied as setting directly to db and doc is not running.
     for ticket in tickets_to_close:
         doc = frappe.get_doc("HD Ticket", ticket)
-        doc.status = "Closed"
-        doc.flags.ignore_validate = True
         try:
-            doc.save(ignore_permissions=True)
+            doc.close_silently()
             # activity log for auto closing the ticket
             log_ticket_activity(
                 doc.name,

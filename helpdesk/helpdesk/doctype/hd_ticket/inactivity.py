@@ -196,11 +196,8 @@ def close_ticket(candidate, status, close_days):
     if not still_waiting(ticket, candidate, status):
         return
 
-    ticket.status = "Closed"
-    # as in close_tickets_after_n_days. It also skips before_save, and with it
-    # the feedback mail: nothing to rate on a closure the customer never asked for
-    ticket.flags.ignore_validate = True
-    ticket.save(ignore_permissions=True)
+    # no feedback mail: nothing to rate on a closure the customer never asked for
+    ticket.close_silently()
 
     with use_language(resolve_ticket_language(ticket)):
         subject = _("[Closed] {0} (#{1})").format(ticket.subject, ticket.name)

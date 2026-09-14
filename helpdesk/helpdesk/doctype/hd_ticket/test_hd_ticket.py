@@ -1555,6 +1555,19 @@ class TestHDTicket(FrappeTestCase):
         set_ticket_status_and_communication_date(
             fresh_ticket.name, eligible_status, within_cutoff
         )
+        # waiting on the customer since the last reply, with the resolution target
+        # long gone in the meantime: the wait is the customer's, not a breach
+        frappe.db.set_value(
+            "HD Ticket",
+            stale_ticket.name,
+            {
+                "first_responded_on": just_past_cutoff - timedelta(minutes=1),
+                "on_hold_since": just_past_cutoff,
+                "resolution_by": just_past_cutoff + timedelta(hours=1),
+                "agreement_status": "Paused",
+            },
+            update_modified=False,
+        )
 
         try:
             close_tickets_after_n_days()
@@ -1564,6 +1577,10 @@ class TestHDTicket(FrappeTestCase):
                 "Closed",
                 "Ticket inactive past the cutoff should be auto closed",
             )
+            closed = frappe.get_doc("HD Ticket", stale_ticket.name)
+            self.assertTrue(closed.resolution_date)
+            self.assertIsNone(closed.on_hold_since)
+            self.assertEqual(closed.agreement_status, "Fulfilled")
             self.assertEqual(
                 frappe.db.get_value("HD Ticket", fresh_ticket.name, "status"),
                 eligible_status,
