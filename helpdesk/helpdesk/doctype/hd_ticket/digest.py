@@ -114,13 +114,20 @@ def get_open_tickets():
     emptied the digest with nothing to show for it.
 
     Highest priority first, and within a priority the ticket that has been
-    waiting longest. The priority weight comes from the priority record itself
-    (P1 is 100, P4 is 400), so renaming a level never reorders the mail.
+    waiting longest. The rank comes from the priority record's level, not from
+    its name, so renaming a priority never reorders the mail.
     """
     tickets = frappe.db.sql(
         """
             SELECT t.name, t.subject, t.customer, t.priority, t.creation,
-                t._assign, COALESCE(p.integer_value, %(unranked)s) AS weight
+                t._assign,
+                CASE p.level
+                    WHEN 'Urgent' THEN 100
+                    WHEN 'High' THEN 200
+                    WHEN 'Medium' THEN 300
+                    WHEN 'Low' THEN 400
+                    ELSE %(unranked)s
+                END AS weight
             FROM `tabHD Ticket` t
             LEFT JOIN `tabHD Ticket Priority` p ON p.name = t.priority
             WHERE t.status_category = 'Open' AND t.is_merged = 0
