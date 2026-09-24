@@ -269,8 +269,7 @@ function setPrimary(type: "email" | "phone", index: number) {
 
 async function handleSave() {
   const tasks: Promise<unknown>[] = [];
-  const contactEdited = isContactDirty.value;
-  if (contactEdited) {
+  if (isContactDirty.value) {
     tasks.push(
       editContactResource.submit({ name: props.name, doc: parseContactData() })
     );
@@ -280,14 +279,9 @@ async function handleSave() {
   }
   if (!tasks.length) return;
   try {
-    const [newName] = await Promise.all(tasks);
+    await Promise.all(tasks);
     state.customer = "";
     open.value = false;
-    // Renaming the contact renames its record too: move to the new address.
-    if (contactEdited && newName && newName !== props.name) {
-      router.replace({ name: "Contact", params: { id: newName as string } });
-      return;
-    }
     doc.reload();
     contactInfoResource.reload();
   } catch (error) {

@@ -4,7 +4,7 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.permissions import add_permission, update_permission_property
 
-from helpdesk.consts import DEFAULT_ARTICLE_CATEGORY
+from helpdesk.consts import DEFAULT_ARTICLE_CATEGORY, DEFAULT_SLA
 from helpdesk.setup.default_views import add_default_views
 
 from .default_template import create_default_template
@@ -64,34 +64,59 @@ def add_default_categories_and_articles():
 def add_default_sla():
     add_default_ticket_priorities()
     add_default_holiday_list()
-    if frappe.db.exists("HD Service Level Agreement", "Default"):
+    if frappe.db.exists("HD Service Level Agreement", DEFAULT_SLA):
         return
     sla_doc = frappe.new_doc("HD Service Level Agreement")
 
-    sla_doc.service_level = "Default"
+    sla_doc.service_level = DEFAULT_SLA
     sla_doc.document_type = "HD Ticket"
     sla_doc.default_sla = 1
     sla_doc.enabled = 1
 
-    # priority: (is_default, response_time, resolution_time)
-    sla_priorities = {
-        "P4": (0, 60 * 60 * 24, 60 * 60 * 72),
-        "P3": (1, 60 * 60 * 8, 60 * 60 * 24),
-        "P2": (0, 60 * 60 * 1, 60 * 60 * 4),
-        "P1": (0, 60 * 30, 60 * 60 * 2),
-    }
+    low_priority = frappe.get_doc(
+        {
+            "doctype": "HD Service Level Priority",
+            "default_priority": 0,
+            "priority": "Low",
+            "response_time": 60 * 60 * 24,
+            "resolution_time": 60 * 60 * 72,
+        }
+    )
 
-    for priority, (is_default, response, resolution) in sla_priorities.items():
-        sla_doc.append(
-            "priorities",
-            {
-                "doctype": "HD Service Level Priority",
-                "default_priority": is_default,
-                "priority": priority,
-                "response_time": response,
-                "resolution_time": resolution,
-            },
-        )
+    medium_priority = frappe.get_doc(
+        {
+            "doctype": "HD Service Level Priority",
+            "default_priority": 1,
+            "priority": "Medium",
+            "response_time": 60 * 60 * 8,
+            "resolution_time": 60 * 60 * 24,
+        }
+    )
+
+    high_priority = frappe.get_doc(
+        {
+            "doctype": "HD Service Level Priority",
+            "default_priority": 0,
+            "priority": "High",
+            "response_time": 60 * 60 * 1,
+            "resolution_time": 60 * 60 * 4,
+        }
+    )
+
+    urgent_priority = frappe.get_doc(
+        {
+            "doctype": "HD Service Level Priority",
+            "default_priority": 0,
+            "priority": "Urgent",
+            "response_time": 60 * 30,
+            "resolution_time": 60 * 60 * 2,
+        }
+    )
+
+    sla_doc.append("priorities", low_priority)
+    sla_doc.append("priorities", medium_priority)
+    sla_doc.append("priorities", high_priority)
+    sla_doc.append("priorities", urgent_priority)
 
     sla_doc.holiday_list = "Default"
 
@@ -125,21 +150,15 @@ def add_default_holiday_list():
 
 
 def add_default_ticket_priorities():
-    ticket_priorities = {
-        "P1": (100, "Critica"),
-        "P2": (200, "Alta"),
-        "P3": (300, "Media"),
-        "P4": (400, "Bassa"),
-    }
+    ticket_priorities = ["Urgent", "High", "Medium", "Low"]
 
-    for priority, (weight, label) in ticket_priorities.items():
+    for priority in ticket_priorities:
         if frappe.db.exists("HD Ticket Priority", priority):
             continue
 
         doc = frappe.new_doc("HD Ticket Priority")
         doc.name = priority
-        doc.integer_value = weight
-        doc.description = label
+        doc.level = priority
         doc.insert()
 
 
@@ -205,10 +224,27 @@ def setup_customer_role(fresh_install=True):
         role_doc.save()
 
     if fresh_install:
-        portal_settings = frappe.get_single("Portal Settings")
-        portal_settings.default_role = "HD Customer"
-        portal_settings.default_portal_home = "/helpdesk"
-        portal_settings.save()
+        set_portal_defaults(overwrite=True)
+
+
+def set_portal_defaults(overwrite=False):
+    """Point the portal at helpdesk. Installing claims the settings outright;
+    the upgrade patch only fills what a site left empty.
+
+    Writes straight into the Single rather than saving the document. A save
+    also validates the portal menu rows, and a row left behind by a deleted
+    doctype fails that validation and takes the whole migration down.
+    """
+    defaults = {"default_role": "HD Customer", "default_portal_home": "/helpdesk"}
+    if overwrite:
+        to_set = defaults
+    else:
+        current = frappe.db.get_singles_dict("Portal Settings")
+        to_set = {
+            field: value for field, value in defaults.items() if not current.get(field)
+        }
+    if to_set:
+        frappe.db.set_single_value("Portal Settings", to_set)
 
 
 def add_website_settings_permission():
@@ -239,8 +275,24 @@ def add_property_setters():
 
 
 def get_custom_fields():
-    """Helpdesk specific custom fields that needs to be added to the Assignment Rule DocType."""
+    """Helpdesk specific custom fields added to framework DocTypes."""
     return {
+        "Tag": [
+            {
+                "fieldname": "app",
+                "label": "App",
+                "fieldtype": "Select",
+                "options": "\nhelpdesk",
+                "insert_after": "description",
+            },
+            {
+                "fieldname": "color",
+                "label": "Color",
+                "fieldtype": "Select",
+                "options": "\nGray\nBlack\nBlue\nGreen\nRed\nPink\nOrange\nAmber\nYellow\nCyan\nTeal\nViolet\nPurple",
+                "insert_after": "app",
+            },
+        ],
         "Assignment Rule": [
             {
                 "description": "Autogenerated field by Helpdesk App",

@@ -1,5 +1,5 @@
 <template>
-  <ActivityHeader :title="title" :tab-name="tabName" />
+  <ActivityHeader :title="title" />
   <FadedScrollableDiv
     class="flex flex-col flex-1 overflow-y-auto"
     :mask-length="20"
@@ -17,7 +17,7 @@
           class="w-full px-6 md:px-5 grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4"
         >
           <div
-            class="relative flex justify-center after:absolute after:left-[50%] after:top-3 after:-z-10 after:border-l after:border-outline-elevation-2"
+            class="relative flex justify-center after:absolute after:start-[50%] after:top-3 after:-z-10 after:border-s after:border-outline-elevation-2"
             :class="[
               i != activities.length - 1 && 'after:h-full',
               !['email', 'feedback', 'call', 'comment'].includes(
@@ -41,11 +41,11 @@
                 size="lg"
                 :label="activity.sender?.full_name"
                 :image="getUser(activity.sender?.name).user_image"
-                class="bg-surface-base absolute left-[0.7px]"
+                class="bg-surface-base absolute start-[0.7px]"
               />
               <CommentIcon
                 v-else-if="activity.type === 'comment'"
-                class="text-ink-gray-5 absolute left-[7.5px]"
+                class="text-ink-gray-5 absolute start-[7.5px]"
               />
               <FeatherIcon
                 v-else-if="activity.type === 'call'"
@@ -54,11 +54,11 @@
                     ? 'phone-incoming'
                     : 'phone-outgoing'
                 "
-                class="text-ink-gray-5 left-[7.5px] size-4"
+                class="text-ink-gray-5 start-[7.5px] size-4"
               />
               <DotIcon
                 v-else
-                class="text-ink-gray-5 absolute left-[7.5px] top-[6px]"
+                class="text-ink-gray-3 absolute start-[7.5px] top-[6px]"
               />
             </div>
           </div>
@@ -110,6 +110,9 @@
 
 <script setup lang="ts">
 import { FadedScrollableDiv } from "@/components";
+import CommentBox from "@/components/CommentBox.vue";
+import EmailArea from "@/components/EmailArea.vue";
+import HistoryBox from "@/components/HistoryBox.vue";
 import {
   ActivityIcon,
   CommentIcon,
@@ -124,9 +127,6 @@ import { Avatar, FeatherIcon } from "frappe-ui";
 import { PropType, computed, h, inject, nextTick, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import FeedbackBox from "../ticket-agent/FeedbackBox.vue";
-import CommentBox from "@/components/CommentBox.vue";
-import EmailArea from "@/components/EmailArea.vue";
-import HistoryBox from "@/components/HistoryBox.vue";
 
 const props = defineProps({
   activities: {
@@ -134,12 +134,6 @@ const props = defineProps({
     required: true,
   },
   title: {
-    type: String,
-    required: true,
-  },
-  // Untranslated tab identifier, used for all string comparisons so that a
-  // translated title cannot break the behaviour.
-  tabName: {
     type: String,
     required: true,
   },
@@ -158,20 +152,20 @@ const { getUser } = useUserStore();
 const makeCall = inject<() => void>("makeCall");
 
 const emptyText = computed(() => {
-  if (props.tabName === "email") return "No email communications";
-  if (props.tabName === "comment") return "No comments found";
-  if (props.tabName === "call") return "No calls made";
+  if (props.title === "Emails") return "No email communications";
+  if (props.title === "Comments") return "No comments found";
+  if (props.title === "Calls") return "No calls made";
 
   return "No activity found";
 });
 
 const emptyTextIcon = computed(() => {
   let icon = ActivityIcon;
-  if (props.tabName == "email") {
+  if (props.title == "Emails") {
     icon = EmailIcon;
-  } else if (props.tabName == "comment") {
+  } else if (props.title == "Comments") {
     icon = CommentIcon;
-  } else if (props.tabName == "call") {
+  } else if (props.title == "Calls") {
     icon = PhoneIcon;
   }
   return h(icon, { class: "text-ink-gray-4" });
@@ -183,8 +177,17 @@ onMounted(() => {
   });
 });
 
+// The URL hash carries only active-tab state (useActiveTabManager). Activity
+// deep-links from notifications/search arrive as ?highlight=<element id>
+// (comment-<name> / communication-<name>, the ids CommentBox and EmailArea
+// render) so the one-shot scroll+cleanup below never touches tab state.
+function linkedActivityId() {
+  const id = route.query.highlight;
+  return typeof id === "string" ? id : "";
+}
+
 function scrollToLatestActivity() {
-  if (route.hash) {
+  if (linkedActivityId()) {
     scrollToHash();
     return;
   }
@@ -199,11 +202,8 @@ function scrollToLatestActivity() {
   }, 500);
 }
 function scrollToHash() {
-  const hash = route.hash;
-  if (hash) {
-    // Remove the # symbol
-    const elementId = hash.substring(1);
-
+  const elementId = linkedActivityId();
+  if (elementId) {
     nextTick(() => {
       // Wait for activities to be rendered
       setTimeout(() => {
@@ -214,10 +214,14 @@ function scrollToHash() {
           // Add highlight effect using Tailwind class
           element.classList.add("bg-surface-yellow-2");
 
-          // Remove highlight after 2 seconds
+          // Remove highlight after 2 seconds; drop only the consumed
+          // ?highlight param, keeping other query keys (?view=) and
+          // whatever tab the user is on by now.
           setTimeout(() => {
             element.classList.remove("bg-surface-yellow-2");
-            router.replace({ hash: "" });
+            const query = { ...route.query };
+            delete query.highlight;
+            router.replace({ query, hash: route.hash });
           }, 2000);
         }
       }, 1000);
@@ -226,14 +230,14 @@ function scrollToHash() {
 }
 
 watch(
-  () => route.hash,
+  () => [route.hash, route.query.highlight],
   () => {
     scrollToLatestActivity();
   }
 );
 
 watch(
-  () => props.tabName,
+  () => props.title,
   () => {
     scrollToLatestActivity();
   },

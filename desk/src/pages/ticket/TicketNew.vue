@@ -19,49 +19,6 @@
       <div v-if="Boolean(template.data?.about)" class="">
         <div class="prose-f" v-html="sanitize(template.data.about)" />
       </div>
-      <!-- category + SLA policy (customer portal) -->
-      <div
-        v-if="isCustomerPortal && ticketOptions.data?.types?.length"
-        class="flex flex-col gap-4"
-      >
-        <div class="flex flex-col gap-2">
-          <span class="block text-sm text-ink-gray-7">
-            {{ __("Category") }}
-            <span class="place-self-center text-ink-red-5"> * </span>
-          </span>
-          <FormControl
-            type="select"
-            :options="categoryOptions"
-            v-model="selectedType"
-            :placeholder="__('Select a category')"
-          />
-        </div>
-        <div
-          v-if="selectedType && slaPolicy.data"
-          class="flex flex-col gap-3 rounded border border-outline-gray-2 bg-surface-gray-1 p-4"
-        >
-          <div
-            v-if="slaPolicy.data.applies"
-            class="prose-f text-sm"
-            v-html="sanitize(slaPolicy.data.policy_html)"
-          />
-          <div v-else class="text-p-sm text-ink-gray-5">
-            {{ __("For this category we handle requests on a best-effort basis during office hours, taking the selected priority into account.") }}
-          </div>
-          <div class="flex flex-col gap-2">
-            <span class="block text-sm text-ink-gray-7">
-              {{ __("Priority level") }}
-              <span class="place-self-center text-ink-red-5"> * </span>
-            </span>
-            <FormControl
-              type="select"
-              :options="levelOptions"
-              v-model="selectedLevel"
-              :placeholder="__('Select the level')"
-            />
-          </div>
-        </div>
-      </div>
       <!-- custom fields -->
       <div
         class="grid grid-cols-1 gap-4 sm:grid-cols-3"
@@ -102,7 +59,7 @@
         :class="(subject.length >= 2 || description.length) && 'gap-5'"
       >
         <div class="flex flex-col gap-2">
-          <span class="block text-sm text-ink-gray-7">
+          <span class="block text-sm text-ink-gray-6">
             {{ __("Subject") }}
             <span class="place-self-center text-ink-red-5"> * </span>
           </span>
@@ -121,7 +78,7 @@
         <div v-if="isCustomerPortal">
           <h4
             v-show="subject.length <= 2 && description.length === 0"
-            class="text-p-sm text-ink-gray-4 ml-1"
+            class="text-p-sm text-ink-gray-4 ms-1"
           >
             {{ __("Please enter a subject to continue") }}
           </h4>
@@ -201,14 +158,7 @@ import {
 } from "frappe-ui";
 import { useOnboarding } from "frappe-ui/frappe";
 import sanitizeHtml from "sanitize-html";
-import {
-  computed,
-  defineAsyncComponent,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-} from "vue";
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import SearchArticles from "../../components/SearchArticles.vue";
 const TicketTextEditor = defineAsyncComponent(
@@ -228,8 +178,8 @@ const router = useRouter();
 const { $dialog } = globalStore();
 const { updateOnboardingStep } = useOnboarding("helpdesk");
 const { isManager, userId: userID } = useAuthStore();
-
-const subject = ref("");
+// Pre-filled by the command palette's "Create ticket …" fallback.
+const subject = ref(String(route.query.subject ?? ""));
 const description = ref("");
 const attachments = ref([]);
 const templateFields = reactive({});
@@ -267,47 +217,6 @@ const ticketPriorityResource = createListResource({
   cache: "ticketPriorities",
 });
 
-// customer-facing category + SLA policy shown while opening a ticket
-const selectedType = ref("");
-const selectedLevel = ref("");
-
-const ticketOptions = createResource({
-  url: "fab_helpdesk.api.get_ticket_options",
-  auto: isCustomerPortal.value,
-  makeParams: () => ({ customer: templateFields["customer"] || "" }),
-});
-
-const slaPolicy = createResource({
-  url: "fab_helpdesk.api.get_sla_policy",
-});
-
-const categoryOptions = computed(() =>
-  (ticketOptions.data?.types || []).map((t) => ({
-    label: t.label,
-    value: t.value,
-  }))
-);
-
-const levelOptions = computed(() =>
-  (slaPolicy.data?.levels || []).map((l) => ({ label: l.label, value: l.value }))
-);
-
-watch(selectedType, (val) => {
-  templateFields["ticket_type"] = val;
-  selectedLevel.value = "";
-  templateFields["priority"] = "";
-  if (val) {
-    slaPolicy.submit({
-      ticket_type: val,
-      customer: templateFields["customer"] || "",
-    });
-  }
-});
-
-watch(selectedLevel, (val) => {
-  templateFields["priority"] = val;
-});
-
 let oldFields = [];
 
 function applyFilters(fieldname: string, filters: any = null) {
@@ -324,9 +233,7 @@ const customOnChange = computed(() => template.data?._customOnChange);
 
 const visibleFields = computed(() => {
   let _fields = template.data?.fields?.filter(
-    // on the portal, drop fields the customer cannot write (permlevel > 0): they
-    // stay visible read-only on the ticket view, but are not offered at creation
-    (f) => !isCustomerPortal.value || (!f.hide_from_customer && !f.permlevel)
+    (f) => !isCustomerPortal.value || !f.hide_from_customer
   );
   if (!_fields) return [];
   return _fields.map((field) => parseField(field, templateFields));
@@ -355,12 +262,6 @@ const ticket = createResource({
     attachments: attachments.value,
   }),
   validate: (params) => {
-    if (isCustomerPortal.value) {
-      if (!selectedType.value) return __("Please select a category");
-      if (!selectedLevel.value) {
-        return __("Please select a priority level");
-      }
-    }
     const fields = visibleFields.value?.filter((f) => f.required) || [];
     const toVerify = [...fields, "subject", "description"];
     for (const field of toVerify) {

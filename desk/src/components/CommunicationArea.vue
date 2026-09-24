@@ -7,7 +7,7 @@
         <Button
           ref="sendEmailRef"
           variant="ghost"
-          :label="__('Reply')"
+          label="Reply"
           :class="[
             showEmailBox ? '!bg-surface-gray-4 hover:!bg-surface-gray-3' : '',
           ]"
@@ -19,7 +19,7 @@
         </Button>
         <Button
           variant="ghost"
-          :label="__('Add comment')"
+          label="Comment"
           :class="[
             showCommentBox ? '!bg-surface-gray-4 hover:!bg-surface-gray-3' : '',
           ]"
@@ -44,13 +44,9 @@
           <EmailEditor
             ref="emailEditorRef"
             :label="
-              isMobileView
-                ? __('Send')
-                : isMac
-                ? __('Send') + ' (⌘ + ⏎)'
-                : __('Send') + ' (Ctrl + ⏎)'
+              isMobileView ? 'Send' : isMac ? 'Send (⌘ + ⏎)' : 'Send (Ctrl + ⏎)'
             "
-            :placeholder="__('Hi John, we are looking into this issue.')"
+            placeholder="Hi John, we are looking into this issue."
             :ticketId="ticketId"
             :to-emails="toEmails"
             :cc-emails="ccEmails"
@@ -83,15 +79,15 @@
             ref="commentTextEditorRef"
             :label="
               isMobileView
-                ? __('Add comment')
+                ? 'Comment'
                 : isMac
-                ? __('Add comment') + ' (⌘ + ⏎)'
-                : __('Add comment') + ' (Ctrl + ⏎)'
+                ? 'Comment (⌘ + ⏎)'
+                : 'Comment (Ctrl + ⏎)'
             "
             :ticketId="ticketId"
             :editable="showCommentBox"
             :doctype="doctype"
-            :placeholder="__('@John could you please look into this?')"
+            placeholder="@John could you please look into this?"
             @submit="
               () => {
                 showCommentBox = false;
@@ -235,14 +231,26 @@ const IGNORED_SELECTORS = [
   ".tippy-content",
   ".PopoverContent",
   '[role="dialog"]',
+  '[role="presentation"]',
   '[role="menu"]',
   ".dialog-overlay",
+  // Grammarly suggestions appear outside the box, allow them to stop collapsing.
+  "grammarly-extension",
+  "grammarly-popups",
+  "[data-grammarly-part]",
 ];
+
+// `ignore` is only consulted on pointerdown, which dialogs stop, so the click
+// through has to be checked too. Without this a dialog button closes the box.
+function isIgnored(event: Event): boolean {
+  const target = event.target as HTMLElement | null;
+  return Boolean(target?.closest?.(IGNORED_SELECTORS.join(", ")));
+}
 
 onClickOutside(
   emailBoxRef,
-  () => {
-    if (showEmailBox.value) {
+  (event) => {
+    if (showEmailBox.value && !isIgnored(event)) {
       showEmailBox.value = false;
     }
   },
@@ -253,8 +261,8 @@ onClickOutside(
 
 onClickOutside(
   commentBoxRef,
-  () => {
-    if (showCommentBox.value) {
+  (event) => {
+    if (showCommentBox.value && !isIgnored(event)) {
       showCommentBox.value = false;
     }
   },

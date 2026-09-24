@@ -1,8 +1,6 @@
 import frappe
 from frappe.model.document import Document
 
-from helpdesk.utils import get_helpdesk_url
-
 
 class HDNotification(Document):
     def format_message(self):
@@ -29,7 +27,7 @@ class HDNotification(Document):
             res += "/tickets/" + str(self.reference_ticket)
         if self.reference_comment:
             res += "#" + self.reference_comment
-        return get_helpdesk_url(res)
+        return frappe.utils.get_url(res)
 
     def parse_html(self):
         from bs4 import BeautifulSoup

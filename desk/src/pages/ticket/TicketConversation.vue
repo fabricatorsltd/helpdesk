@@ -3,7 +3,7 @@
     v-if="showHeader"
     class="mx-6 md:mx-10 md:my-2 flex items-center justify-between text-lg-medium mb-4 !mt-6 md:h-8 md:text-2xl md:font-semibold md:text-ink-gray-8"
   >
-    {{ __("Activity") }}
+    Activity
   </div>
   <div class="overflow-auto px-5 md:px-10 grow">
     <div
@@ -17,7 +17,7 @@
         class="w-full activity grid grid-cols-[30px_minmax(auto,_1fr)] gap-2 sm:gap-4 h-full"
       >
         <div
-          class="relative flex justify-center after:absolute after:left-[50%] after:top-3 after:-z-10 after:border-l after:border-outline-gray-modals"
+          class="relative flex justify-center after:absolute after:start-[50%] after:top-3 after:-z-10 after:border-s after:border-outline-gray-1"
           :class="[
             i != communications.length - 1 ? 'after:h-full' : 'after:h-5',
           ]"
@@ -44,7 +44,6 @@
 </template>
 
 <script setup lang="ts">
-import { __ } from "@/translation";
 import { isElementInViewport } from "@/utils";
 import { Avatar } from "frappe-ui";
 import { computed, inject, nextTick, watch } from "vue";

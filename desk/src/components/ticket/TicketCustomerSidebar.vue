@@ -1,8 +1,8 @@
 <template>
-  <div class="flex w-[382px] flex-col border-l gap-4">
+  <div class="flex w-[382px] flex-col border-s gap-4">
     <!-- Ticket ID -->
     <div class="flex items-center justify-between border-b px-5 py-3">
-      <span class="cursor-copy text-lg-semibold">{{ __("Ticket details") }}</span>
+      <span class="cursor-copy text-lg-semibold">Ticket details</span>
     </div>
     <!-- user info and sla info -->
     <div class="flex flex-col gap-4 pt-0 px-5 py-3 border-b">
@@ -53,15 +53,17 @@
       <!-- sla info -->
       <div
         v-for="data in slaData"
-        :key="data.label"
+        :key="data.title"
         class="flex items-center text-base"
       >
-        <div class="w-[126px] text-ink-gray-5 text-sm">{{ __(data.title) }}</div>
+        <div class="w-[126px] text-ink-gray-5 text-sm">{{ data.title }}</div>
         <div
           class="break-words text-base text-ink-gray-8 flex items-center gap-2"
         >
           <Tooltip :text="dateFormat(data.value, dateTooltipFormat)">
-            <Badge :label="data.label" :theme="data.theme" variant="subtle" />
+            <span class="truncate text-base" :class="data.textColor">
+              {{ __(data.label) }}
+            </span>
           </Tooltip>
           <!-- SLA explanation icon -->
           <Tooltip
@@ -118,10 +120,15 @@
 </template>
 
 <script setup lang="ts">
+import {
+  slaLabel,
+  slaTextColor,
+  useSLA,
+  type SLAMetric,
+} from "@/composables/useSLA";
 import { ITicket } from "@/pages/ticket/symbols";
 import { Field } from "@/types";
-import { __ } from "@/translation";
-import { dateFormat, dateTooltipFormat, formatTime } from "@/utils";
+import { dateFormat, dateTooltipFormat } from "@/utils";
 import { Avatar, dayjs, Tooltip } from "frappe-ui";
 import { computed, inject } from "vue";
 
@@ -129,102 +136,46 @@ const emit = defineEmits(["open"]);
 
 const ticket = inject(ITicket);
 
-const slaData = computed(() => {
-  const firstResponse = firstResponseData();
-  const rows = [
+interface SLARow {
+  title: string;
+  metric: SLAMetric;
+  value: string;
+}
+
+const { firstResponse, resolution } = useSLA(
+  computed(() => ({ doc: ticket.data }))
+);
+
+const slaData = computed(() =>
+  [
     {
       title: "First Response",
+      metric: firstResponse.value,
       value: ticket.data.first_responded_on || ticket.data.response_by,
-      label: firstResponse.label,
-      theme: firstResponse.color,
     },
-  ];
-  // Resolution, only when the SLA commits to a target
-  if (ticket.data.resolution_by) {
-    const resolution = resolutionData();
-    rows.push({
+    {
       title: "Resolution",
+      metric: resolution.value,
       value: ticket.data.resolution_date || ticket.data.resolution_by,
-      label: resolution.label,
-      theme: resolution.color,
-    });
-  }
-  return rows;
-});
-
-function firstResponseData() {
-  let firstResponse = null;
-  if (
-    !ticket.data.first_responded_on &&
-    dayjs().isBefore(dayjs(ticket.data.response_by))
-  ) {
-    firstResponse = {
-      label: __("Due in {0}", [
-        formatTime(dayjs(ticket.data.response_by).diff(dayjs(), "s")),
-      ]),
-      color: "orange",
-    };
-  } else if (
-    dayjs(ticket.data.first_responded_on).isBefore(
-      dayjs(ticket.data.response_by)
-    )
-  ) {
-    firstResponse = {
-      label: __("Fulfilled in {0}", [
-        formatTime(
-          dayjs(ticket.data.first_responded_on).diff(
-            dayjs(ticket.data.creation),
-            "s"
-          )
-        ),
-      ]),
-      color: "green",
-    };
-  } else {
-    firstResponse = {
-      label: __("Failed"),
-      color: "red",
-    };
-  }
-  return firstResponse;
-}
-
-function resolutionData() {
-  let resolution = null;
-  if (
-    !ticket.data.resolution_date &&
-    dayjs().isBefore(ticket.data.resolution_by)
-  ) {
-    resolution = {
-      label: __("Due in {0}", [
-        formatTime(dayjs(ticket.data.resolution_by).diff(dayjs(), "s")),
-      ]),
-      color: "orange",
-    };
-  } else if (ticket.data.agreement_status === "Fulfilled") {
-    resolution = {
-      label: __("Fulfilled in {0}", [
-        formatTime(dayjs(ticket.data.resolution_time, "s")),
-      ]),
-      color: "green",
-    };
-  } else {
-    resolution = {
-      label: __("Failed"),
-      color: "red",
-    };
-  }
-  return resolution;
-}
+    },
+  ]
+    .filter((row): row is SLARow => Boolean(row.metric))
+    .map((row) => ({
+      title: row.title,
+      value: row.value,
+      label: slaLabel(row.metric),
+      textColor: slaTextColor(row.metric),
+    }))
+);
 
 const ticketBasicInfo = computed(() => [
   {
-    label: __("Ticket ID"),
+    label: "Ticket ID",
     value: ticket.data.name,
   },
   {
-    label: __("Status"),
-    value: __(ticket.data.status),
+    label: "Status",
+    value: ticket.data.status,
     bold: true,
   },
 ]);
@@ -233,17 +184,17 @@ const ticketAdditionalInfo = computed(() => {
   const fields = [
     {
       fieldname: "subject",
-      label: __("Subject"),
+      label: "Subject",
       value: ticket.data.subject,
     },
     {
       fieldname: "team",
-      label: __("Team"),
+      label: "Team",
       value: ticket.data.agent_group || "-",
     },
     {
       fieldname: "priority",
-      label: __("Priority"),
+      label: "Priority",
       value: ticket.data.priority,
     },
   ];
@@ -255,7 +206,7 @@ const ticketAdditionalInfo = computed(() => {
     )
     .map((field: Field) => {
       const option = {
-        label: __(field.label),
+        label: field.label,
         value: ticket.data[field.fieldname],
       };
       if (field.fieldtype === "Date") {

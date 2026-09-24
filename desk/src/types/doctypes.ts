@@ -29,8 +29,6 @@ export interface HDTicketStatus extends DocType {
   order?: number;
   /** Enabled: Check */
   enabled: 0 | 1;
-  /** System only: Check (custom field, fab_helpdesk) */
-  fab_system_only?: 0 | 1;
 }
 
 // Last updated: 2026-06-28 13:51:31.692161
@@ -271,6 +269,8 @@ export interface HDServiceLevelAgreement extends DocType {
   priorities: HDServiceLevelPriority[];
   /** Default SLA: Check */
   default_sla: 0 | 1;
+  /** Rank: Int */
+  rank: number;
   /** Default Priority: Link (HD Ticket Priority) */
   default_priority?: string;
   /** Enabled: Check */
@@ -289,7 +289,7 @@ export interface HDServiceLevelAgreement extends DocType {
   default_ticket_status?: string;
 }
 
-// Last updated: 2026-06-02 01:18:56.023594
+// Last updated: 2026-07-27 16:57:56.129699
 export interface HDAgent extends DocType {
   /** User: Link (User) */
   user: string;

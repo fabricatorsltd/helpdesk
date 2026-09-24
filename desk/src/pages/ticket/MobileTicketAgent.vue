@@ -5,7 +5,7 @@
         <Breadcrumbs :items="breadcrumbs" />
       </template>
       <template #right-header>
-        <div class="absolute right-0 pr-2">
+        <div class="absolute end-0 pe-2">
           <Dropdown :options="dropdownOptions">
             <template #default="{ open }">
               <Button :label="ticket.doc.status">
@@ -34,8 +34,40 @@
       v-if="ticket.doc?.name"
     >
       <!-- left side -->
-      <div class="flex items-center gap-2 max-w-[50%]">
-        <AssignTo :hide-label="true" />
+      <div class="flex items-center gap-2 max-w-[65%]">
+        <Link
+          class="min-w-0 flex-1"
+          doctype="HD Team"
+          :hide-clear-button="true"
+          :model-value="ticket.doc.agent_group"
+          @update:model-value="(val) => updateField('agent_group', val)"
+        >
+          <!-- Same trigger styling as AssignTo so the header controls match -->
+          <template #target="{ togglePopover }">
+            <Button
+              variant="outline"
+              class="!flex !justify-start w-full active:!bg-inherit hover:shadow-sm [&>span]:w-full"
+              @click="togglePopover()"
+            >
+              <div class="flex items-center min-h-5 gap-2 w-full">
+                <span
+                  class="truncate"
+                  :class="
+                    ticket.doc.agent_group
+                      ? 'text-ink-gray-7'
+                      : 'text-ink-gray-5'
+                  "
+                >
+                  {{ ticket.doc.agent_group || __("Team") }}
+                </span>
+              </div>
+              <template #suffix>
+                <LucideChevronDown class="h-4 w-4 ms-auto text-ink-gray-5" />
+              </template>
+            </Button>
+          </template>
+        </Link>
+        <AssignTo class="min-w-0 flex-1" :hide-label="true" />
       </div>
       <!-- right side -->
       <div class="flex items-center gap-2">
@@ -52,7 +84,7 @@
             :modelValue="tabIndex"
             :tabs="tabs"
             @update:modelValue="changeTabTo"
-            class="[&_[role='tab']]:px-0 [&_[role='tablist']]:px-5 [&_[role='tablist']]:gap-7.5"
+            class="[&_[role='tab']]:px-0 [&_[role='tablist']]:px-3 [&_[role='tablist']]:gap-7.5"
           >
             <template #tab-panel="{ tab }">
               <div v-if="tab.name === 'details'">
@@ -69,11 +101,29 @@
                   class="border-b px-6 py-3 text-base text-gray-600"
                   :ticket="ticket.doc"
                 />
-                <!-- SLA Section -->
-                <h3 class="px-6 pt-3 text-base-semibold">
-                  {{ __("SLA") }}
-                </h3>
-                <TicketAgentDetails :ticket="ticket.doc" />
+                <!-- SLA Section, hidden when no policy is attached -->
+                <template v-if="ticket.doc?.sla">
+                  <h3 class="px-6 pt-3 text-base-semibold">
+                    {{ __("SLA") }}
+                  </h3>
+                  <div class="px-6 py-3">
+                    <TicketSLA />
+                  </div>
+                </template>
+                <div
+                  class="flex items-center border-b px-6 py-3 text-base leading-5"
+                >
+                  <div class="w-[126px] text-sm text-ink-gray-5">
+                    {{ __("Source") }}
+                  </div>
+                  <div>
+                    {{
+                      ticket.doc?.via_customer_portal
+                        ? __("Portal")
+                        : __("Mail")
+                    }}
+                  </div>
+                </div>
                 <!-- Ticket Fields -->
                 <h3 class="px-6 pt-3 text-base-semibold">
                   {{ __("Details") }}
@@ -94,7 +144,6 @@
                 ref="ticketAgentActivitiesRef"
                 :activities="filterActivities(tab.name)"
                 :title="tab.label"
-                :tab-name="tab.name"
                 :ticket-status="ticket.doc?.status"
                 @update="() => reloadTicket(props.ticketId)"
                 @email:reply="
@@ -154,7 +203,7 @@
         >
           {{ __("Confirm") }}
         </Button>
-        <Button class="ml-2" @click="showSubjectDialog = false">
+        <Button class="ms-2" @click="showSubjectDialog = false">
           {{ __("Close") }}
         </Button>
       </template>
@@ -191,7 +240,7 @@ import {
   watchEffect,
 } from "vue";
 
-import { CommunicationArea, LayoutHeader } from "@/components";
+import { CommunicationArea, LayoutHeader, Link } from "@/components";
 import {
   ActivityIcon,
   CommentIcon,
@@ -205,7 +254,7 @@ import { TicketAgentActivities } from "@/components/ticket";
 import CustomActions from "@/components/CustomActions.vue";
 import AssignTo from "@/components/ticket-agent/AssignTo.vue";
 import SetContactPhoneModal from "@/components/ticket/SetContactPhoneModal.vue";
-import TicketAgentDetails from "@/components/ticket/TicketAgentDetails.vue";
+import TicketSLA from "@/components/ticket-agent/TicketSLA.vue";
 import TicketAgentFields from "@/components/ticket/TicketAgentFields.vue";
 import {
   parseField,
@@ -427,7 +476,7 @@ const breadcrumbs = computed(() => {
 });
 
 const dropdownOptions = computed(() =>
-  ticketStatusStore.selectableStatuses().map((o: HDTicketStatus) => ({
+  ticketStatusStore.statuses.data?.map((o: HDTicketStatus) => ({
     label: o.label_agent,
     value: o.label_agent,
     onClick: () => ticket.value.setValue.submit({ status: o.label_agent }),
@@ -514,10 +563,8 @@ const _activities = computed(() => {
   });
 
   activities.value.data.history.map((h) => {
-    // the backend sends a translated `label`; `action` stays English for logic
-    h.label = h.label || h.action;
-    if (h.label && h.owner && h.label.includes(h.owner)) {
-      h.label = h.label.replace(h.owner, __("themselves"));
+    if (h.action && h.owner && h.action.includes(h.owner)) {
+      h.action = h.action.replace(h.owner, "themselves");
     }
     return h;
   });
@@ -529,8 +576,7 @@ const _activities = computed(() => {
     return {
       type: "history",
       key: h.creation,
-      content: h.label ? h.label : __("viewed this"),
-      rawContent: h.action ? h.action : "viewed this",
+      content: h.action ? h.action : __("viewed this"),
       creation: h.creation,
       user: h.user.name + " ",
     };
@@ -543,11 +589,9 @@ const _activities = computed(() => {
       name: call.name,
       key: call.creation,
       call_type: call.type,
-      content: __(
-        "{0} made a call to {1}",
-        call.caller || __("Unknown"),
-        call.receiver || __("Unknown")
-      ),
+      content: `${call.caller || "Unknown"} made a call to ${
+        call.receiver || "Unknown"
+      }`,
       duration: call.duration ? call.duration + "s" : "0s",
     };
   });
@@ -570,15 +614,13 @@ const _activities = computed(() => {
       currentActivity.relatedActivities = [currentActivity];
       for (let j = i + 1; j < sorted.length + 1; j++) {
         const nextActivity = sorted[j];
-        // grouping runs on the untranslated action, never on the displayed label
-        const nextContent = nextActivity?.rawContent ?? nextActivity?.content;
 
         if (
           nextActivity &&
           nextActivity.user === currentActivity.user &&
-          nextContent !== "viewed this" &&
-          !nextContent.includes("assigned") &&
-          !nextContent.includes("unassigned")
+          nextActivity.content !== "viewed this" &&
+          !nextActivity.content.includes("assigned") &&
+          !nextActivity.content.includes("unassigned")
         ) {
           currentActivity.relatedActivities.push(nextActivity);
         } else {

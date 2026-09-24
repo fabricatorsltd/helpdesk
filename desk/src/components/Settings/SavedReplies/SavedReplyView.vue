@@ -1,18 +1,9 @@
 <template>
-  <SettingsLayoutBase>
-    <template #title>
-      <div class="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          icon-left="chevron-left"
-          :label="savedReplyData.title || __('New Saved Reply')"
-          size="md"
-          @click="goBack()"
-          class="cursor-pointer -ml-4 hover:bg-transparent focus:bg-transparent focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:none active:bg-transparent active:outline-none active:ring-0 active:ring-offset-0 active:text-ink-gray-5 font-semibold text-ink-gray-7 text-lg hover:opacity-70 !pr-0"
-        />
-        <UnsavedBadge :show="isDirty" />
-      </div>
-    </template>
+  <SettingsLayoutBase
+    :back-label="savedReplyData.title || __('New Saved Reply')"
+    :on-back="goBack"
+    :dirty="isDirty"
+  >
     <template #header-actions>
       <div class="flex items-center gap-2">
         <Button
@@ -115,6 +106,10 @@
           />
           <ErrorMessage class="text-p-sm" :message="errors.message" />
         </div>
+        <ActionsEditor
+          v-model="savedReplyData.actions"
+          :error="errors.actions"
+        />
       </div>
     </template>
   </SettingsLayoutBase>
@@ -156,6 +151,8 @@ import { FieldAutocomplete } from "../../../tiptap-extensions";
 import { SavedReply, SavedReplyListResourceSymbol, Team } from "../../../types";
 import SettingsLayoutBase from "../../layouts/SettingsLayoutBase.vue";
 import { disableSettingModalOutsideClick } from "../settingsModal";
+import ActionsEditor from "./components/ActionsEditor.vue";
+import { actionNeedsValue, isActionValueEmpty } from "./components/actionTypes";
 import PreviewDialog from "./components/PreviewDialog.vue";
 
 const showConfirmDialog = ref({
@@ -186,12 +183,14 @@ const savedReplyData = ref({
   scope: savedRepliesActiveScreen.value.data?.scope || "Personal",
   message: "",
   teams: [],
+  actions: [],
 });
 const initialData = ref("");
 const errors = ref({
   title: "",
   message: "",
   teams: "",
+  actions: "",
 });
 
 const scopeDropdownOptions = computed(() => {
@@ -234,6 +233,7 @@ const getSavedReplyData = createResource({
       scope: data.scope,
       message: data.message,
       teams: data.teams?.map((team) => team.team) || [],
+      actions: JSON.parse(data.actions || "[]"),
     };
     initialData.value = JSON.stringify(savedReplyData.value);
   },
@@ -307,10 +307,8 @@ const goBack = () => {
 const onSave = () => {
   validateData();
 
-  if (Object.values(errors.value).some((e) => e)) {
-    toast.error(__("Please fill all the required fields"));
-    return;
-  }
+  // Each field shows its own inline error; no toast needed
+  if (Object.values(errors.value).some((e) => e)) return;
 
   if (savedRepliesActiveScreen.value.data?.name) {
     updateSavedReply();
@@ -328,6 +326,7 @@ const createSavedReply = () => {
       teams: savedReplyData.value.teams.map((team) => ({
         team: team,
       })),
+      actions: savedReplyData.value.actions,
     },
     {
       onSuccess: (data) => {
@@ -367,6 +366,7 @@ const updateSavedReply = async () => {
     teams: savedReplyData.value.teams.map((team) => ({
       team: team,
     })),
+    actions: savedReplyData.value.actions,
   });
 
   if (savedReplyData.value.name !== savedReplyData.value.title) {
@@ -429,6 +429,16 @@ const validateData = (key?: string) => {
         }
         break;
 
+      case "actions": {
+        const hasEmpty = savedReplyData.value.actions.some(
+          (action) =>
+            actionNeedsValue(action.action_type) &&
+            isActionValueEmpty(action.action_type, action.value)
+        );
+        errors.value.actions = hasEmpty ? __("Values can't be empty") : "";
+        break;
+      }
+
       default:
         break;
     }
@@ -445,6 +455,7 @@ const validateData = (key?: string) => {
 watch(
   savedReplyData,
   (newVal) => {
+    if (errors.value.actions) validateData("actions");
     if (!initialData.value) return;
     isDirty.value = JSON.stringify(newVal) != initialData.value;
     if (isDirty.value) {

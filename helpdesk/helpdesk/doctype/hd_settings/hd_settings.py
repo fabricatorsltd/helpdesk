@@ -9,7 +9,6 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.model.naming import append_number_if_name_exists
 from frappe.realtime import get_website_room
-from frappe.utils import cint
 from frappe.utils.jinja import validate_template
 
 from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import (
@@ -21,8 +20,6 @@ from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import (
 class HDSettings(Document):
     def validate(self):
         self.validate_auto_close_days()
-        self.validate_inactivity_days()
-        self.validate_digest_hour()
         self.validate_email_contents()
         self.validate_send_feedback_when_ticket_closed()
 
@@ -31,34 +28,6 @@ class HDSettings(Document):
             frappe.throw(
                 _("Day count for auto closing tickets cannot be negative or zero")
             )
-
-    def validate_inactivity_days(self):
-        # fields created by fab_helpdesk (see ensure_inactivity_fields): absent
-        # on a plain helpdesk site, where there is nothing to validate.
-        if not self.get("fab_inactivity_enabled"):
-            return
-        reminder_days = cint(self.get("fab_inactivity_reminder_days"))
-        close_days = cint(self.get("fab_inactivity_close_days"))
-        if reminder_days <= 0 or close_days <= 0:
-            frappe.throw(_("Inactivity day counts cannot be negative or zero"))
-        if reminder_days >= close_days:
-            frappe.throw(_("The reminder must be sent before the ticket is closed"))
-        status_category = frappe.db.get_value(
-            "HD Ticket Status", self.get("fab_inactivity_status"), "category"
-        )
-        if status_category != "Paused":
-            frappe.throw(
-                _("The waiting for customer status must be of <u>Paused</u> category.")
-            )
-
-    def validate_digest_hour(self):
-        # fields created by fab_helpdesk (see ensure_digest_fields): absent on a
-        # plain helpdesk site, where there is nothing to validate.
-        if not self.get("fab_digest_enabled"):
-            return
-        hour = cint(self.get("fab_digest_hour"))
-        if hour < 0 or hour > 23:
-            frappe.throw(_("The digest hour must be between 0 and 23"))
 
     def validate_send_feedback_when_ticket_closed(self):
         if not self.enable_email_ticket_feedback:

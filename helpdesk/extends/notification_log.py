@@ -1,7 +1,5 @@
 import frappe
 
-from helpdesk.utils import get_helpdesk_url
-
 
 def before_insert(doc, method=None):
     if (
@@ -9,4 +7,4 @@ def before_insert(doc, method=None):
         and doc.document_type == "HD Ticket"
         and doc.document_name
     ):
-        doc.link = get_helpdesk_url("/helpdesk/tickets/" + str(doc.document_name))
+        doc.link = frappe.utils.get_url("/helpdesk/tickets/" + str(doc.document_name))

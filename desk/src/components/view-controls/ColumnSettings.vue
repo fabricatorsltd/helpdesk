@@ -1,7 +1,7 @@
 <template>
   <NestedPopover>
     <template #target>
-      <Button :label="__('Columns')">
+      <Button label="Columns">
         <template v-if="hideLabel" #icon>
           <ColumnsIcon class="h-4" />
         </template>
@@ -102,7 +102,7 @@
               <FormControl
                 type="text"
                 size="md"
-                :label="__('Label')"
+                label="Label"
                 v-model="column.label"
                 class="sm:w-full w-52"
                 placeholder="First Name"
@@ -110,26 +110,24 @@
               <FormControl
                 type="text"
                 size="md"
-                :label="__('Width')"
+                label="Width"
                 class="sm:w-full w-52"
                 v-model="column.width"
                 placeholder="10rem"
-                :description="
-                  __('Width can be in number, pixel or rem (eg. 3, 30px, 10rem)')
-                "
+                :description="'Width can be in number, pixel or rem (eg. 3, 30px, 10rem)'"
                 :debounce="500"
               />
             </div>
             <div class="flex w-full gap-2 border-t pt-2">
               <Button
                 variant="subtle"
-                :label="__('Cancel')"
+                label="Cancel"
                 class="w-full flex-1"
                 @click="cancelUpdate"
               />
               <Button
                 variant="solid"
-                :label="__('Update')"
+                label="Update"
                 class="w-full flex-1"
                 @click="updateColumn(column)"
               />
@@ -150,7 +148,6 @@ import {
 } from "@/components/icons";
 import NestedPopover from "@/components/NestedPopover.vue";
 import Autocomplete from "@/components/frappe-ui/Autocomplete.vue";
-import { __ } from "@/translation";
 import { isTouchScreenDevice } from "@/utils";
 import Draggable from "vuedraggable";
 import { computed, ref, inject } from "vue";
@@ -205,21 +202,13 @@ const rows = computed({
   },
 });
 
-// The label is shown translated but kept in English on `rawLabel`, so a column
-// added here is stored (and saved to the view) the same way the backend sends it.
-function translateField(field) {
-  return { ...field, rawLabel: field.label, label: __(field.label) };
-}
-
 const fields = computed(() => {
   let allFields = list.data?.fields;
   if (!allFields) return [];
-  if (columns.value === "") return allFields.map(translateField);
-  return allFields
-    .filter((field) => {
-      return !columns.value.find((column) => column.key === field.value);
-    })
-    .map(translateField);
+  if (columns.value === "") return allFields;
+  return allFields.filter((field) => {
+    return !columns.value.find((column) => column.key === field.value);
+  });
 });
 
 function addColumn(c) {
@@ -227,7 +216,7 @@ function addColumn(c) {
     ? "right"
     : "left";
   let _column = {
-    label: c.rawLabel || c.label,
+    label: c.label,
     type: c.type,
     key: c.value,
     width: "10rem",

@@ -151,39 +151,11 @@ def edit_contact(name: str, doc: dict):
 
     if user := contact_doc.get("user"):
         user_doc = frappe.get_doc("User", user)
-        # Saving the user copies its name back onto the contact, so keep both in
-        # step or the rename is undone right here.
-        user_doc.first_name = contact_doc.first_name
-        user_doc.last_name = contact_doc.last_name
         user_doc.user_image = doc.get("image", "")
         user_doc.time_zone = doc.get("timezone", "")
         user_doc.save()
 
-    # The record is named after the full name at creation and Frappe never
-    # renames it, so the old name kept showing wherever the contact is listed.
-    new_name = _contact_record_name(contact_doc)
-    if new_name != contact_doc.name:
-        from frappe.model.rename_doc import rename_doc
-
-        return rename_doc(
-            "Contact", contact_doc.name, new_name, ignore_permissions=True
-        )
-
     return contact_doc.name
-
-
-def _contact_record_name(contact) -> str:
-    """The name Contact.autoname would give this contact today."""
-    from frappe.model.naming import append_number_if_name_exists
-    from frappe.utils import cstr
-
-    name = contact._get_full_name()
-    for link in contact.links:
-        name = name + "-" + cstr(link.link_name).strip()
-        break
-    if name != contact.name and frappe.db.exists("Contact", name):
-        name = append_number_if_name_exists("Contact", name)
-    return name
 
 
 @frappe.whitelist(methods=["GET"])

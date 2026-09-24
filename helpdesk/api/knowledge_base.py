@@ -4,26 +4,14 @@ from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import get_user_info_for_avatar
 
-from helpdesk.utils import get_customers, is_agent
-
-
-def _reader_can_see_article(article) -> bool:
-    """Audience gate for non-staff readers: published, and either public or
-    restricted to one of the reader's customers. The fab_* fields are optional
-    (present only when fab_helpdesk is installed); missing means public."""
-    if article.get("status") != "Published":
-        return False
-    if (article.get("fab_visibility") or "Public") == "Public":
-        return True
-    allowed = {r.get("customer") for r in (article.get("fab_customers") or [])}
-    return bool(set(get_customers()) & allowed)
+from helpdesk.utils import is_agent
 
 
 @frappe.whitelist(allow_guest=True)
 def get_article(name: str):
     article = frappe.get_doc("HD Article", name).as_dict()
 
-    if not is_agent() and not _reader_can_see_article(article):
+    if not is_agent() and article["status"] != "Published":
         frappe.throw(_("Access denied"), frappe.PermissionError)
 
     author = get_user_info_for_avatar(article["author"])
@@ -50,13 +38,6 @@ def get_article(name: str):
         ),
         "category_id": article.category,
         "feedback": int(feedback),
-        # Audience/language for the agent editor. The customer list is only
-        # exposed to staff (it names other customers who can see the article).
-        "fab_visibility": article.get("fab_visibility") or "Public",
-        "fab_language": article.get("fab_language"),
-        "fab_customers": [r.get("customer") for r in (article.get("fab_customers") or [])]
-        if is_agent()
-        else [],
     }
 
     return article
@@ -105,33 +86,15 @@ def move_to_category(category: str, articles: list[str]):
             frappe.throw(_("Error moving article to category"))
 
 
-def language_or_filters(language: str | None) -> list:
-    """Articles without a language are neutral: they show up under every
-    language, next to the ones tagged with the requested one."""
-    if not language or not frappe.db.has_column("HD Article", "fab_language"):
-        return []
-    return [["fab_language", "=", language], ["fab_language", "is", "not set"]]
-
-
 @frappe.whitelist()
-def get_categories(language: str | None = None):
+def get_categories():
     categories = frappe.get_list(
         "HD Article Category",
         fields=["name", "category_name", "modified"],
     )
-    article_filters = {"status": "Published"}
-    or_filters = language_or_filters(language)
     for c in categories:
-        # get_list (not db.count) so the audience permission filter and the
-        # optional language filter both apply to the visible-article count.
-        c["article_count"] = len(
-            frappe.get_list(
-                "HD Article",
-                filters={**article_filters, "category": c.name},
-                or_filters=or_filters,
-                pluck="name",
-                limit_page_length=0,
-            )
+        c["article_count"] = frappe.db.count(
+            "HD Article", filters={"category": c.name, "status": "Published"}
         )
 
     categories.sort(key=lambda c: c["article_count"], reverse=True)
@@ -140,12 +103,10 @@ def get_categories(language: str | None = None):
 
 
 @frappe.whitelist()
-def get_category_articles(category: str, language: str | None = None):
-    filters = {"category": category, "status": "Published"}
+def get_category_articles(category: str):
     articles = frappe.get_list(
         "HD Article",
-        filters=filters,
-        or_filters=language_or_filters(language),
+        filters={"category": category, "status": "Published"},
         fields=["name", "title", "published_on", "modified", "author", "content"],
     )
     for article in articles:

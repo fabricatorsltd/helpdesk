@@ -14,7 +14,6 @@ export const useTicketStatusStore = defineStore("ticketStatus", () => {
       "category",
       "color",
       "enabled",
-      "fab_system_only",
     ],
     orderBy: "`tabHD Ticket Status`.order",
     pageLength: 1000,
@@ -29,15 +28,6 @@ export const useTicketStatusStore = defineStore("ticketStatus", () => {
       });
     },
   });
-
-  // Statuses a human may pick. System-only ones (Merged) are still resolved by
-  // getStatus, so lists, filters and badges keep rendering them. A function, not
-  // a computed: destructuring a computed off the store would freeze its value.
-  function selectableStatuses(): HDTicketStatus[] {
-    return (
-      statuses.data?.filter((s: HDTicketStatus) => !s.fab_system_only) || []
-    );
-  }
 
   function getStatus(label: string): HDTicketStatus | undefined {
     return statuses.data?.find(
@@ -64,12 +54,11 @@ export const useTicketStatusStore = defineStore("ticketStatus", () => {
 
   return {
     statuses,
-    selectableStatuses,
     colorMap,
     getStatus,
   };
 });
-function parseColor(color: string): string {
+export function parseColor(color: string): string {
   color = color.toLowerCase();
   let textColor = `!text-${color}-500`;
   if (color == "black") {

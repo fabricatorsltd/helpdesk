@@ -15,6 +15,8 @@ from helpdesk.utils import (
     parse_call_logs,
 )
 
+SLA_ROW_FIELDS = ["sla", "status", "first_responded_on", "resolution_date"]
+
 
 @frappe.whitelist()
 def get_list_data(
@@ -113,6 +115,9 @@ def get_list_data(
     rows.append("name") if "name" not in rows else rows
     if doctype == "HD Ticket":
         rows.append("_seen") if "_seen" not in rows else rows
+        # the SLA columns can't tell fulfilled from due without these, and no saved view lists them
+        for field in SLA_ROW_FIELDS:
+            rows.append(field) if field not in rows else rows
     data = (
         frappe.get_list(
             doctype,
@@ -341,6 +346,15 @@ def get_filterable_fields(
                 "options": "HD Agent",
             }
         )
+        res.append(
+            {
+                "fieldname": "_user_tags",
+                "fieldtype": "Link",
+                "label": "Tags",
+                "name": "_user_tags",
+                "options": "Tag",
+            }
+        )
 
     if not ignore_team_restrictions:
         enable_restrictions = frappe.db.get_single_value(
@@ -412,7 +426,7 @@ def get_quick_filters(doctype: str, show_customer_portal_fields: bool = False):
     meta = frappe.get_meta(doctype)
     fields = [field for field in meta.fields if field.in_standard_filter]
     quick_filters = []
-    name_filter = {"label": _("ID"), "name": "name", "type": "Data"}
+    name_filter = {"label": "ID", "name": "name", "type": "Data"}
     if doctype == "Contact":
         quick_filters.append(name_filter)
         return quick_filters

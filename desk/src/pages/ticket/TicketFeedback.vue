@@ -41,7 +41,7 @@
             <Button
               v-for="o in options.data"
               :key="o.name"
-              :label="__(o.label)"
+              :label="o.label"
               :theme="preset === o.name ? 'blue' : 'gray'"
               variant="subtle"
               @click="preset = o.name"

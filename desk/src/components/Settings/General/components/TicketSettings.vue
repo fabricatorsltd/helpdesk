@@ -191,96 +191,6 @@
           </div>
         </div>
       </div>
-      <div>
-        <div class="flex items-center justify-between">
-          <div class="flex flex-col gap-1">
-            <span class="text-base-medium text-ink-gray-8">{{
-              __("Remind and close tickets waiting on the customer")
-            }}</span>
-            <span class="text-p-sm text-ink-gray-6">{{
-              __(
-                "Remind the customer of a ticket left waiting on them, then close it if no reply arrives."
-              )
-            }}</span>
-          </div>
-          <Switch v-model="settingsData.inactivityEnabled" />
-        </div>
-        <div
-          class="grid grid-cols-3 gap-4 mt-3"
-          v-if="settingsData.inactivityEnabled"
-        >
-          <div class="flex flex-col gap-1.5">
-            <FormLabel :label="__('Ticket status')" size="md" />
-            <SelectDropdown
-              :options="inactivityStatusList"
-              v-model="settingsData.inactivityStatus"
-              target-class="w-full"
-              placement="bottom-start"
-            />
-          </div>
-          <FormControl
-            :label="__('Remind after (Days)')"
-            placeholder="e.g. 3"
-            v-model="settingsData.inactivityReminderDays"
-            type="number"
-            :debounce="300"
-          />
-          <div class="flex flex-col gap-1.5">
-            <FormControl
-              :label="__('Close after (Days)')"
-              placeholder="e.g. 7"
-              v-model="settingsData.inactivityCloseDays"
-              type="number"
-              :debounce="300"
-            />
-            <ErrorMessage
-              :message="
-                Number(settingsData.inactivityCloseDays) <=
-                Number(settingsData.inactivityReminderDays)
-                  ? __('The reminder must be sent before the ticket is closed')
-                  : ''
-              "
-            />
-          </div>
-        </div>
-      </div>
-      <div>
-        <div class="flex items-center justify-between">
-          <div class="flex flex-col gap-1">
-            <span class="text-base-medium text-ink-gray-8">{{
-              __("Daily digest of open tickets")
-            }}</span>
-            <span class="text-p-sm text-ink-gray-6">{{
-              __(
-                "Email every agent the tickets still open, on weekday mornings in their own timezone."
-              )
-            }}</span>
-          </div>
-          <Switch v-model="settingsData.digestEnabled" />
-        </div>
-        <div
-          class="grid grid-cols-3 gap-4 mt-3"
-          v-if="settingsData.digestEnabled"
-        >
-          <div class="flex flex-col gap-1.5">
-            <FormControl
-              :label="__('Send at (Hour)')"
-              placeholder="e.g. 8"
-              v-model="settingsData.digestHour"
-              type="number"
-              :debounce="300"
-            />
-            <ErrorMessage
-              :message="
-                Number(settingsData.digestHour) < 0 ||
-                Number(settingsData.digestHour) > 23
-                  ? __('The hour must be between 0 and 23')
-                  : ''
-              "
-            />
-          </div>
-        </div>
-      </div>
       <div class="flex flex-col gap-2">
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
@@ -366,7 +276,7 @@ import { computed, inject } from "vue";
 
 const settingsData = inject(HDSettingsSymbol);
 
-const { selectableStatuses } = useTicketStatusStore();
+const { statuses } = useTicketStatusStore();
 
 const bannerMsg = createResource({
   url: "helpdesk.helpdesk.doctype.hd_settings.helpers.get_banner_msg",
@@ -412,7 +322,7 @@ const ticketTypeList = createListResource({
 
 const autoUpdateTicketStatusList = computed(() => {
   return (
-    selectableStatuses().map((s: HDTicketStatus) => {
+    statuses.data?.map((s: HDTicketStatus) => {
       return {
         label: s.label_agent,
         value: s.label_agent,
@@ -421,23 +331,10 @@ const autoUpdateTicketStatusList = computed(() => {
   );
 });
 
-const inactivityStatusList = computed(() => {
-  return (
-    selectableStatuses()
-      .filter((s: HDTicketStatus) => s.category === "Paused")
-      ?.map((s: HDTicketStatus) => {
-        return {
-          label: s.label_agent,
-          value: s.label_agent,
-        };
-      }) || []
-  );
-});
-
 const autoCloseTicketStatusList = computed(() => {
   return (
-    selectableStatuses()
-      .filter(
+    statuses.data
+      ?.filter(
         (s: HDTicketStatus) =>
           s.category === "Resolved" || s.category === "Paused"
       )

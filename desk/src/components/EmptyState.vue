@@ -52,9 +52,10 @@
         <span
           v-if="descriptionText"
           :class="{
-            'text-center text-xs text-ink-gray-6 mt-1': text === 'sm',
-            'text-center text-sm text-ink-gray-6 mt-1': text === 'md' || !text,
-            'text-center text-base text-ink-gray-6 mt-1': text === 'lg',
+            'text-center text-p-xs text-ink-gray-6 mt-1': text === 'sm',
+            'text-center text-p-sm text-ink-gray-6 mt-1':
+              text === 'md' || !text,
+            'text-center text-p-base text-ink-gray-6 mt-1': text === 'lg',
           }"
         >
           {{ __(descriptionText) }}
@@ -84,7 +85,9 @@ const props = withDefaults(defineProps<Props>(), {
 const descriptionText = computed(() =>
   props.description !== undefined && props.description !== ""
     ? props.description
-    : "Create a new one using the Create button."
+    : `Create new ${props.title
+        .split(" ")[1]
+        .toLocaleLowerCase()} using the Create button.`
 );
 </script>
 

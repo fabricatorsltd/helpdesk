@@ -7,7 +7,7 @@
     @change="(e) => setSort(e)"
   >
     <template #target="{ togglePopover }">
-      <Button :label="__('Sort')" @click="togglePopover()">
+      <Button :label="'Sort'" @click="togglePopover()">
         <template v-if="hideLabel" #icon>
           <SortIcon class="h-4" />
         </template>
@@ -19,7 +19,7 @@
   </Autocomplete>
   <NestedPopover v-else>
     <template #target="{ open }">
-      <Button v-if="sortValues.size > 1" :label="__('Sort')">
+      <Button v-if="sortValues.size > 1" :label="'Sort'">
         <template v-if="hideLabel" #icon>
           <SortIcon class="h-4" />
         </template>
@@ -35,7 +35,7 @@
       <div v-else class="flex items-center justify-center">
         <Button
           v-if="sortValues.size"
-          class="rounded-r-none border-r"
+          class="rounded-e-none border-e"
           @click.stop="
             () => {
               Array.from(sortValues)[0].direction =
@@ -52,7 +52,7 @@
         </Button>
         <Button
           :label="getSortLabel()"
-          :class="sortValues.size ? 'rounded-l-none' : ''"
+          :class="sortValues.size ? 'rounded-s-none' : ''"
         >
           <template v-if="!hideLabel && !sortValues?.size" #prefix>
             <SortIcon class="h-4" />
@@ -87,7 +87,7 @@
               <div class="flex">
                 <Button
                   size="md"
-                  class="rounded-r-none border-r"
+                  class="rounded-e-none border-e"
                   @click="
                     () => {
                       sort.direction = sort.direction == 'asc' ? 'desc' : 'asc';
@@ -109,11 +109,11 @@
                     #target="{ togglePopover, selectedValue, displayValue }"
                   >
                     <Button
-                      class="flex w-full items-center justify-between rounded-l-none !text-ink-gray-5 text-xs"
+                      class="flex w-full items-center justify-between rounded-s-none !text-ink-gray-5 text-xs"
                       size="md"
                       @click="togglePopover()"
                     >
-                      {{ displayValue(selectedValue) }}
+                      {{ __(displayValue(selectedValue)) }}
                       <template #suffix>
                         <FeatherIcon
                           name="chevron-down"
@@ -168,7 +168,6 @@
 </template>
 
 <script setup>
-import { __ } from "@/translation";
 import { computed, inject } from "vue";
 import { NestedPopover } from "frappe-ui";
 import { useSortable } from "@vueuse/integrations/useSortable";
@@ -235,7 +234,7 @@ function getSortLabel() {
     (option) => option.value === values[0].fieldname
   )?.label;
 
-  return label || sort.fieldname;
+  return __(label) || __(sort.fieldname);
 }
 
 function setSort(data) {

@@ -6,12 +6,12 @@
     class="[&_[role='tab']]:px-0 [&_[role='tablist']]:px-5 [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:flex-shrink-0 [&_[role='tabpanel'][data-state='active']]:flex-1"
   >
     <template #tab-panel="{ tab }">
+      <TicketAnalyticsTab v-if="tab.name === 'analytics'" />
       <TicketAgentActivities
-        v-if="Boolean(activities.data)"
+        v-else-if="Boolean(activities.data)"
         ref="ticketAgentActivitiesRef"
         :activities="filterActivities(tab.name as TicketTab)"
         :title="tab.label"
-        :tab-name="tab.name"
         :ticket-status="ticket.doc.status"
         @email:reply="
           (e) => {
@@ -56,16 +56,11 @@ import {
   EmailIcon,
   PhoneIcon,
 } from "@/components/icons";
+import TicketAnalyticsTab from "@/components/ticket-agent/analytics/TicketAnalyticsTab.vue";
+import LucideChartNoAxesColumn from "~icons/lucide/chart-no-axes-column";
 import { useActiveTabManager } from "@/composables/useActiveTabManager";
 import { useTelephonyStore } from "@/stores/telephony";
-import { __ } from "@/translation";
-import {
-  ActivitiesSymbol,
-  FeedbackActivity,
-  TabObject,
-  TicketSymbol,
-  TicketTab,
-} from "@/types";
+import { ActivitiesSymbol, TabObject, TicketSymbol, TicketTab } from "@/types";
 import { Button, Tabs } from "frappe-ui";
 import { storeToRefs } from "pinia";
 import { computed, ComputedRef, inject, ref } from "vue";
@@ -87,17 +82,17 @@ const tabs: ComputedRef<TabObject[]> = computed(() => {
   const _tabs: TabObject[] = [
     {
       name: "activity",
-      label: __("Activity"),
+      label: "Activity",
       icon: ActivityIcon,
     },
     {
       name: "email",
-      label: __("Emails"),
+      label: "Emails",
       icon: EmailIcon,
     },
     {
       name: "comment",
-      label: __("Comments"),
+      label: "Comments",
       icon: CommentIcon,
     },
   ];
@@ -105,10 +100,15 @@ const tabs: ComputedRef<TabObject[]> = computed(() => {
   if (isCallingEnabled.value) {
     _tabs.push({
       name: "call",
-      label: __("Calls"),
+      label: "Calls",
       icon: PhoneIcon,
     });
   }
+  _tabs.push({
+    name: "analytics",
+    label: "Analytics",
+    icon: LucideChartNoAxesColumn,
+  });
   return _tabs;
 });
 
@@ -158,11 +158,12 @@ const _activities = computed(() => {
   });
 
   activities.value.data.history.map((h) => {
-    // the backend sends a translated `label`; `action` stays English for logic
-    h.label = h.label || h.action;
-    // if the label includes h.owner, replace it with 'themselves'
-    if (h.label && h.owner && h.label.includes(h.owner)) {
-      h.label = h.label.replace(h.owner, __("themselves"));
+    // }
+    h.action;
+    h.owner;
+    // if h.actions includes h.owner, replace it with 'themselves'
+    if (h.action && h.owner && h.action.includes(h.owner)) {
+      h.action = h.action.replace(h.owner, "themselves");
     }
     return h;
   });
@@ -174,8 +175,7 @@ const _activities = computed(() => {
     return {
       type: "history",
       key: h.creation,
-      content: h.label ? h.label : __("viewed this"),
-      rawContent: h.action ? h.action : "viewed this",
+      content: h.action ? h.action : "viewed this",
       creation: h.creation,
       user: h.user.name + " ",
     };
@@ -188,11 +188,9 @@ const _activities = computed(() => {
       name: call.name,
       key: call.creation,
       call_type: call.type,
-      content: __(
-        "{0} made a call to {1}",
-        call.caller || __("Unknown"),
-        call.receiver || __("Unknown")
-      ),
+      content: `${call.caller || "Unknown"} made a call to ${
+        call.receiver || "Unknown"
+      }`,
       duration: call.duration ? call.duration + "s" : "0s",
     };
   });
@@ -213,15 +211,13 @@ const _activities = computed(() => {
       currentActivity.relatedActivities = [currentActivity];
       for (let j = i + 1; j < sorted.length + 1; j++) {
         const nextActivity = sorted[j];
-        // grouping runs on the untranslated action, never on the displayed label
-        const nextContent = nextActivity?.rawContent ?? nextActivity?.content;
 
         if (
           nextActivity &&
           nextActivity.user === currentActivity.user &&
-          nextContent !== "viewed this" &&
-          !nextContent.includes("assigned") &&
-          !nextContent.includes("unassigned")
+          nextActivity.content !== "viewed this" &&
+          !nextActivity.content.includes("assigned") &&
+          !nextActivity.content.includes("unassigned")
         ) {
           currentActivity.relatedActivities.push(nextActivity);
         } else {
@@ -235,28 +231,8 @@ const _activities = computed(() => {
     }
     i++;
   }
-  // add feedback data at the last always
-  // name is email
-  // full_name is name
-
-  if (ticket.value.doc.feedback_rating === 0) {
-    return data;
-  }
-  let feedbackActivity: FeedbackActivity[] = [
-    {
-      type: "feedback",
-      key: "feedback-activity",
-      feedback_rating: ticket.value?.doc.feedback_rating,
-      feedback_extra: ticket.value?.doc.feedback_extra,
-      feedback: ticket.value?.doc.feedback,
-      sender: {
-        name: ticket.value?.doc.raised_by,
-        full_name: ticket.value?.doc.contact,
-      },
-    },
-  ];
-  data.push(...feedbackActivity);
-
+  // Feedback is not a timeline entry on desktop, it lives in the sidebar
+  // (TicketDetailsTab). Mobile still appends it to its own activity list.
   return data;
 });
 

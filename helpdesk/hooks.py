@@ -38,10 +38,8 @@ scheduler_events = {
         "helpdesk.search.download_corpus",
     ],
     "daily": [
-        "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days",
-        "helpdesk.helpdesk.doctype.hd_ticket.inactivity.run",
+        "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.close_tickets_after_n_days"
     ],
-    "hourly": ["helpdesk.helpdesk.doctype.hd_ticket.digest.run"],
     "hourly_long": [
         "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.update_sla_status_in_ticket"
     ],
@@ -102,9 +100,6 @@ doc_events = {
     "Notification Log": {
         "before_insert": "helpdesk.extends.notification_log.before_insert",
     },
-    "ToDo": {
-        "after_insert": "helpdesk.extends.todo.after_insert",
-    },
 }
 
 # For List View
@@ -115,6 +110,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+    "HD Agent": "helpdesk.helpdesk.doctype.hd_agent.hd_agent.has_permission",
     "HD Ticket": "helpdesk.helpdesk.doctype.hd_ticket.hd_ticket.has_permission",
     "HD Saved Reply": "helpdesk.helpdesk.doctype.hd_saved_reply.hd_saved_reply.has_permission",
     "HD Customer": "helpdesk.helpdesk.doctype.hd_customer.hd_customer.has_permission",
@@ -128,7 +124,6 @@ override_doctype_class = {
     "Email Account": "helpdesk.overrides.email_account.CustomEmailAccount",
     "Assignment Rule": "helpdesk.overrides.assignment_rule.HelpdeskAssignmentRule",
     "User Invitation": "helpdesk.overrides.user_invitation.HelpdeskUserInvitation",
-    "Notification Log": "helpdesk.overrides.notification_log.HelpdeskNotificationLog",
 }
 
 ignore_links_on_delete = [

@@ -1,6 +1,6 @@
 <template>
   <span>
-    <a :href="isShowable ? undefined : url" target="_blank">
+    <a :href="preview ? undefined : url" target="_blank">
       <Button
         :label="label"
         theme="gray"
@@ -18,12 +18,22 @@
     <Dialog v-model:open="showDialog" :title="label" size="4xl">
       <template #default>
         <div
-          v-if="isText"
+          v-if="preview === 'text'"
           class="prose prose-sm max-w-none whitespace-pre-wrap"
         >
           {{ content }}
         </div>
-        <img v-if="isImage" :src="url" class="m-auto rounded border" />
+        <img
+          v-if="preview === 'image'"
+          :src="url"
+          class="m-auto rounded border"
+        />
+        <video
+          v-if="preview === 'video'"
+          :src="url"
+          controls
+          class="m-auto max-h-[70vh] rounded border"
+        />
       </template>
     </Dialog>
   </span>
@@ -66,6 +76,27 @@ const ICONS: Record<AttachmentKind, Component> = {
   file: markRaw(LucideFile),
 };
 
+// browsers render only some image/video mimes (.dwg is image/vnd.dwg, .avi is
+// video/x-msvideo) — anything absent here becomes a download link like pdf
+type Preview = "image" | "video" | "text";
+
+const PREVIEWS: Record<string, Preview> = {
+  "image/png": "image",
+  "image/jpeg": "image",
+  "image/gif": "image",
+  "image/webp": "image",
+  "image/svg+xml": "image",
+  "image/avif": "image",
+  "image/bmp": "image",
+  "image/apng": "image",
+  "image/vnd.microsoft.icon": "image",
+  "video/mp4": "video",
+  "video/webm": "video",
+  "video/ogg": "video",
+  "video/x-m4v": "video",
+  "text/plain": "text",
+};
+
 function getKind(mime: string): AttachmentKind {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
@@ -77,16 +108,13 @@ function getKind(mime: string): AttachmentKind {
 
 const showDialog = ref(false);
 const mimeType = getMime(props.label) || "";
-const kind = getKind(mimeType);
-const isImage = kind === "image";
-const isText = kind === "text";
-const isShowable = props.url && (isText || isImage);
-const icon = ICONS[kind];
+const icon = ICONS[getKind(mimeType)];
+const preview = props.url ? PREVIEWS[mimeType] : undefined;
 const content = ref("");
 
 function toggleDialog() {
-  if (!isShowable) return;
-  if (isText) {
+  if (!preview) return;
+  if (preview === "text") {
     fetch(props.url).then((res) => res.text().then((t) => (content.value = t)));
   }
   showDialog.value = !showDialog.value;

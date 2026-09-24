@@ -38,14 +38,6 @@
       >
         <!-- Top Element -->
         <div class="flex flex-col gap-3">
-          <!-- Audience + language (agent editor) -->
-          <ArticleAudienceFields
-            v-if="editable && !isCustomerPortal"
-            v-model:language="fabLanguage"
-            v-model:visibility="fabVisibility"
-            v-model:customers="fabCustomers"
-            @change="onAudienceChange"
-          />
           <!-- Title -->
           <div class="flex sm:flex-row flex-col justify-between">
             <div class="w-full">
@@ -90,7 +82,7 @@
                 v-if="!editable && !isCustomerPortal && !isMobileView"
                 class="text-p-sm text-ink-gray-4 items-center"
               >
-                <span>{{ views }} views</span>
+                <span>{{ views }} {{ __("views") }}</span>
               </div>
             </div>
             <div class="flex gap-4 justify-between sm:items-start">
@@ -181,7 +173,7 @@
             <EditorContent :class="editorClass" />
             <EditorFixedMenu
               v-if="editable"
-              class="-ml-1 overflow-x-auto w-full"
+              class="-ms-1 overflow-x-auto w-full"
               :items="fullToolbar"
             />
           </template>
@@ -203,7 +195,7 @@
                 {{ article.data.author.name }}
               </p>
               <div class="flex items-center gap-1">
-                <span class="text-p-xs text-ink-gray-7">
+                <span class="text-p-xs text-ink-gray-6">
                   {{
                     dayjsLocal(article.data.modified).format("MMM D, h:mm A")
                   }}
@@ -259,13 +251,11 @@ import {
   ThumbsUpFilledIcon,
   ThumbsUpIcon,
 } from "@/components/icons";
-import ArticleAudienceFields from "@/components/knowledge-base/ArticleAudienceFields.vue";
 import ArticleFeedback from "@/components/knowledge-base/ArticleFeedback.vue";
 import CategoryModal from "@/components/knowledge-base/CategoryModal.vue";
 import MoveToCategoryModal from "@/components/knowledge-base/MoveToCategoryModal.vue";
 import { useScreenSize } from "@/composables/screen";
 import { useAuthStore } from "@/stores/auth";
-import { useConfigStore } from "@/stores/config";
 import {
   deleteRes as deleteArticle,
   incrementView,
@@ -352,7 +342,6 @@ const category = reactive({
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
-const configStore = useConfigStore();
 
 const editorRef = ref(null);
 const editable = ref(route.query.isEdit ?? false);
@@ -361,14 +350,6 @@ const dislikes = ref(0);
 const views = ref(0);
 const content = ref("");
 const title = ref("");
-
-// Audience + language controls (agent editor only)
-const fabVisibility = ref("Public");
-const fabLanguage = ref("");
-const fabCustomers = ref<string[]>([]);
-function onAudienceChange() {
-  isDirty.value = true;
-}
 const feedback = ref<FeedbackAction>();
 
 const titleRef = ref(null);
@@ -401,9 +382,6 @@ const article: Resource<Article> = createResource({
     content.value = data.content;
     title.value = data.title;
     feedback.value = data.feedback;
-    fabVisibility.value = data.fab_visibility || "Public";
-    fabLanguage.value = data.fab_language || "";
-    fabCustomers.value = data.fab_customers || [];
     if (isCustomerPortal.value) {
       capture("article_viewed", {
         data: {
@@ -504,9 +482,6 @@ function handleDiscard() {
   isDirty.value = false;
   title.value = article.data.title;
   content.value = article.data.content;
-  fabVisibility.value = article.data.fab_visibility || "Public";
-  fabLanguage.value = article.data.fab_language || "";
-  fabCustomers.value = article.data.fab_customers || [];
   const original = addLinksToHeadings(article.data.content);
   textEditorContentWithIDs.value = null;
   nextTick(() => {
@@ -551,12 +526,6 @@ function handleArticleUpdate() {
       fieldname: {
         content: content.value,
         title: title.value,
-        fab_visibility: fabVisibility.value,
-        fab_language: fabLanguage.value || null,
-        fab_customers:
-          fabVisibility.value === "Restricted"
-            ? fabCustomers.value.map((c) => ({ customer: c }))
-            : [],
       },
     },
     {
@@ -673,10 +642,9 @@ const articleActions = computed(() => [
     label: __("Share"),
     icon: "lucide-link",
     onClick: () => {
-      copyToClipboard(
-        configStore.articleUrl(props.articleId),
-        __("Article link copied to clipboard")
-      );
+      const url = new URL(window.location.href);
+      url.pathname = `/helpdesk/kb-public/articles/${props.articleId}`;
+      copyToClipboard(url.toString(), __("Article link copied to clipboard"));
     },
   },
   {
@@ -694,7 +662,7 @@ const articleActions = computed(() => [
 const breadcrumbs = computed(() => {
   const items: Breadcrumb[] = [
     {
-      label: isMobileView.value ? "" : __("Knowledge Base"),
+      label: isMobileView.value ? __("KB") : __("Knowledge Base"),
       route: {
         name: isCustomerPortal.value
           ? "CustomerKnowledgeBase"

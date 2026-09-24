@@ -1,18 +1,9 @@
 <template>
-  <SettingsLayoutBase>
-    <template #title>
-      <div class="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          icon-left="chevron-left"
-          :label="slaData.service_level || __('New SLA Policy')"
-          size="md"
-          @click="goBack()"
-          class="cursor-pointer -ml-4 hover:bg-transparent focus:bg-transparent focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:none active:bg-transparent active:outline-none active:ring-0 active:ring-offset-0 active:text-ink-gray-5 font-semibold text-ink-gray-7 text-lg hover:opacity-70 !pr-0"
-        />
-        <UnsavedBadge :show="isDirty" />
-      </div>
-    </template>
+  <SettingsLayoutBase
+    :back-label="slaData.service_level || __('New SLA Policy')"
+    :on-back="goBack"
+    :dirty="isDirty"
+  >
     <template #header-actions>
       <div class="flex gap-4 items-center">
         <div
@@ -43,25 +34,46 @@
       </div>
       <div v-if="!slaData.loading">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <FormControl
-              :type="'text'"
-              size="sm"
-              variant="subtle"
-              :placeholder="__('Name')"
-              :label="__('Name')"
-              v-model="slaData.service_level"
-              required
-              @change="validateSlaData('service_level')"
-              :disabled="Boolean(slaActiveScreen.data)"
-              maxlength="50"
-            />
-            <ErrorMessage :message="slaDataErrors.service_level" class="mt-2" />
+          <div class="space-y-5">
+            <div>
+              <FormControl
+                :type="'text'"
+                size="sm"
+                variant="subtle"
+                :placeholder="__('Name')"
+                :label="__('Name')"
+                v-model="slaData.service_level"
+                required
+                @change="validateSlaData('service_level')"
+                :disabled="Boolean(slaActiveScreen.data)"
+                maxlength="50"
+              />
+              <ErrorMessage
+                :message="slaDataErrors.service_level"
+                class="mt-2"
+              />
+            </div>
+            <div class="space-y-1.5" v-if="!slaData.default_sla">
+              <FormLabel :label="__('Rank')" for="rank" size="md" />
+              <FormControl
+                id="rank"
+                type="number"
+                min="0"
+                variant="subtle"
+                v-model="slaData.rank"
+                :description="
+                  __(
+                    'When more than one policy matches, the lower rank is applied first. 0 means unranked, and is applied last.'
+                  )
+                "
+              />
+            </div>
           </div>
           <FormControl
             :type="'textarea'"
             size="sm"
             variant="subtle"
+            :rows="8"
             :placeholder="__('Description')"
             :label="__('Description')"
             v-model="slaData.description"
@@ -293,7 +305,6 @@ import { disableSettingModalOutsideClick } from "../settingsModal";
 import { useOnboarding } from "frappe-ui/frappe";
 import { __ } from "@/translation";
 import SettingsLayoutBase from "@/components/layouts/SettingsLayoutBase.vue";
-import UnsavedBadge from "@/components/UnsavedBadge.vue";
 import { SlaPolicyListResourceSymbol } from "@/types";
 import { HDServiceLevelAgreement } from "@/types/doctypes";
 
@@ -484,10 +495,6 @@ const updateSla = () => {
 };
 
 const toggleEnabled = () => {
-  if (slaData.value.default_sla) {
-    toast.error(__("SLA set as default cannot be disabled"));
-    return;
-  }
   slaData.value.enabled = !slaData.value.enabled;
 };
 

@@ -13,7 +13,7 @@
         <Tooltip :text="s.tooltipValue">
           <Badge
             v-if="s.badgeText"
-            class="-ml-1"
+            class="-ms-1"
             :label="s.badgeText"
             variant="subtle"
             :theme="s.badgeColor"
@@ -25,7 +25,6 @@
 </template>
 
 <script setup lang="ts">
-import { __ } from "@/translation";
 import {
   dateFormat,
   dateTooltipFormat,
@@ -63,7 +62,7 @@ const firstResponseBadge = computed(() => {
     }
     handleFirstResponseInterval(responseBy);
     firstResponse = {
-      label: __("Due in {0}", [formatTime(firstResponseSeconds.value)]),
+      label: `Due in ${formatTime(firstResponseSeconds.value)}`,
       color: "orange",
     };
   } else if (
@@ -72,19 +71,17 @@ const firstResponseBadge = computed(() => {
     )
   ) {
     firstResponse = {
-      label: __("Fulfilled in {0}", [
-        formatTime(
-          dayjs(props.ticket.first_responded_on).diff(
-            dayjs(props.ticket.creation),
-            "s"
-          )
-        ),
-      ]),
+      label: `Fulfilled in ${formatTime(
+        dayjs(props.ticket.first_responded_on).diff(
+          dayjs(props.ticket.creation),
+          "s"
+        )
+      )}`,
       color: "green",
     };
   } else {
     firstResponse = {
-      label: __("Failed"),
+      label: "Failed",
       color: "red",
     };
   }
@@ -103,7 +100,7 @@ const resolutionBadge = computed(() => {
   ) {
     let timeLeft = dayjs(props.ticket.resolution_by).diff(dayjs(), "s");
     resolution = {
-      label: __("{0} left (On Hold)", [formatTime(timeLeft)]),
+      label: `${formatTime(timeLeft)} left (On Hold)`,
       color: "blue",
     };
   } else if (
@@ -116,19 +113,19 @@ const resolutionBadge = computed(() => {
     handleResolutionInterval(resolutionBy);
 
     resolution = {
-      label: __("Due in {0}", [formatTime(resolutionSeconds.value)]),
+      label: `Due in ${formatTime(resolutionSeconds.value)}`,
       color: "orange",
     };
   } else if (props.ticket.agreement_status === "Fulfilled") {
     resolution = {
-      label: __("Fulfilled in {0}", [
-        formatTime(dayjs(props.ticket.resolution_time, "s")),
-      ]),
+      label: `Fulfilled in ${formatTime(
+        dayjs(props.ticket.resolution_time, "s")
+      )}`,
       color: "green",
     };
   } else {
     resolution = {
-      label: __("Failed"),
+      label: "Failed",
       color: "red",
     };
   }
@@ -147,28 +144,23 @@ function getCalculatedResolution() {
 
 const sections = computed(() => [
   {
-    label: __("First Response"),
+    label: "First Response",
     tooltipValue: dateFormat(props.ticket.response_by, dateTooltipFormat),
     badgeText: firstResponseBadge.value.label,
     badgeColor: firstResponseBadge.value.color,
   },
-  // Resolution, only when the SLA commits to a target
-  ...(props.ticket.resolution_by
-    ? [
-        {
-          label: __("Resolution"),
-          tooltipValue: dateFormat(
-            props.ticket.resolution_date || props.ticket.resolution_by,
-            dateTooltipFormat
-          ),
-          badgeText: resolutionBadge.value.label,
-          badgeColor: resolutionBadge.value.color,
-        },
-      ]
-    : []),
   {
-    label: __("Source"),
-    value: props.ticket.via_customer_portal ? __("Portal") : __("Mail"),
+    label: "Resolution",
+    tooltipValue: dateFormat(
+      props.ticket.resolution_date || props.ticket.resolution_by,
+      dateTooltipFormat
+    ),
+    badgeText: resolutionBadge.value.label,
+    badgeColor: resolutionBadge.value.color,
+  },
+  {
+    label: "Source",
+    value: props.ticket.via_customer_portal ? "Portal" : "Mail",
   },
 ]);
 

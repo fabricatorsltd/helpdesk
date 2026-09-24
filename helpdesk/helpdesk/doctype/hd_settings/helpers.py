@@ -1,6 +1,3 @@
-from contextlib import contextmanager
-from email.utils import parseaddr
-
 import frappe
 from frappe.utils import get_datetime
 
@@ -9,133 +6,87 @@ def is_email_content_empty(content: str | None) -> bool:
     return content is None or content.strip() == ""
 
 
-def get_default_language() -> str:
-    return frappe.conf.get("helpdesk_default_language") or "it"
-
-
-def resolve_ticket_language(doc) -> str:
-    """Pick the email language for a ticket from its sender.
-
-    - existing user account for the sender email -> that user's language
-    - else sender linked to a customer -> the customer's default language
-    - else -> the helpdesk default language
-    """
-    from helpdesk.utils import get_customers
-
-    email_id = parseaddr(doc.get("raised_by") or "")[1].lower()
-
-    if email_id:
-        user_lang = frappe.db.get_value("User", email_id, "language")
-        if user_lang:
-            return user_lang
-
-    customer = doc.get("customer")
-    if not customer and doc.get("contact"):
-        customers = get_customers(contact=doc.get("contact"))
-        customer = customers[0] if customers else None
-
-    if customer:
-        lang = frappe.db.get_value("HD Customer", customer, "default_language")
-        if not lang:
-            erpnext_customer = frappe.db.get_value(
-                "HD Customer", customer, "erpnext_customer"
-            )
-            if erpnext_customer:
-                lang = frappe.db.get_value("Customer", erpnext_customer, "language")
-        if lang:
-            return lang
-
-    return get_default_language()
-
-
-@contextmanager
-def use_language(lang: str | None):
-    """Temporarily switch the translation language for outbound content."""
-    previous = getattr(frappe.local, "lang", None)
-    if lang:
-        frappe.local.lang = lang
-    try:
-        yield
-    finally:
-        frappe.local.lang = previous
-
-
 def get_default_email_content(type: str) -> str:
     if type == "share_feedback":
         return """\
-<p>{{ _("Your request has been closed. How did we do?") }}</p>
-<p style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">
-  <strong>{{ _("Request no.") }} {{ doc.name }}</strong><br>
-  {{ doc.subject }}
-</p>
-<p style="margin:20px 0;"><a href="{{ url }}" style="display:inline-block;padding:10px 18px;background:#171717;border-radius:6px;color:#ffffff;font-weight:600;text-decoration:none;">{{ _("Rate the support you received") }}</a></p>
-<p style="color:#8d95a0;">{{ _("It takes less than a minute. Thank you.") }}</p>
-"""
+<p>Hello,</p>
+<p>Thanks for reaching out to us. We’d love your feedback on your recent support experience with ticket #{{ doc.name }}.</p>
+<a href="{{ url }}" class="btn btn-primary">Share Feedback</a>
+
+<p>Thank you!<br>Support Team</p>"""
 
     if type == "acknowledgement":
         return """\
-<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- {{ _("Reply above this line") }} -##</p>
-<p>{{ _("Thank you for contacting us. We have received your request and opened a support ticket. Our team will get back to you shortly.") }}</p>
-<p style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">
-  <strong>{{ _("Request no.") }} {{ doc.name }}</strong>
+<p>Hi,</p>
+<br />
+<p>Thank you for reaching out to us. We've received your request and created a support ticket.</p>
+<p>
+    <strong>Ticket ID:</strong> {{ doc.name }}<br />
+    <strong>Subject:</strong> {{ doc.subject }}<br />
 </p>
-<p>{{ _("You can add a comment to your request by replying to this email. To view or update it,") }} <a href="{{ ticket_url }}">{{ _("click here") }}</a>.</p>
-<p style="color:#8d95a0;">{{ _("If you did not submit this request, you can safely ignore this message.") }}</p>
-"""
-
-    if type == "new_ticket_to_agents":
-        return """\
-<p>{{ _("A new support request has arrived by email.") }}</p>
-<table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
-  <tr><td style="color:#8d95a0;">{{ _("Request") }}</td><td><strong>#{{ doc.name }}</strong> - {{ doc.subject }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("From") }}</td><td>{{ raised_by }}{% if contact_name %} ({{ contact_name }}){% endif %}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Customer") }}</td><td>{{ customer or _("Not associated") }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Contract") }}</td><td>{{ contract or "-" }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("SLA") }}</td><td>{{ doc.sla }} - {{ _("Priority") }} {{ doc.priority }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Response due") }}</td><td>{{ response_by or "-" }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Resolution due") }}</td><td>{{ resolution_by or "-" }}</td></tr>
-</table>
-<p style="margin-top:14px;color:#8d95a0;">{{ _("Message") }}</p>
-<div style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">{{ message }}</div>
-<p style="margin-top:14px;"><a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
-"""
-
-    if type == "assigned_to_agent":
-        return """\
-<p>{{ _("Request #{0} has been assigned to you by {1}.").format(doc.name, assigned_by) }}</p>
-<table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
-  <tr><td style="color:#8d95a0;">{{ _("Request") }}</td><td><strong>#{{ doc.name }}</strong> - {{ doc.subject }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("From") }}</td><td>{{ raised_by }}{% if contact_name %} ({{ contact_name }}){% endif %}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Customer") }}</td><td>{{ customer or _("Not associated") }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Contract") }}</td><td>{{ contract or "-" }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("SLA") }}</td><td>{{ doc.sla }} - {{ _("Priority") }} {{ doc.priority }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Response due") }}</td><td>{{ response_by or "-" }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Resolution due") }}</td><td>{{ resolution_by or "-" }}</td></tr>
-</table>
-<p style="margin-top:14px;color:#8d95a0;">{{ _("Message") }}</p>
-<div style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">{{ message }}</div>
-<p style="margin-top:14px;"><a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
+<p>Our team is reviewing it and will get back to you shortly.</p>
+<br />
+<p>Best,<br />Support Team</p>
 """
 
     if type == "reply_to_agents":
         return """\
-<p>{{ _("A new reply has arrived on a support request.") }}</p>
-<table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
-  <tr><td style="color:#8d95a0;">{{ _("Request") }}</td><td><strong>#{{ doc.name }}</strong> - {{ doc.subject }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("From") }}</td><td>{{ raised_by }}{% if contact_name %} ({{ contact_name }}){% endif %}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Customer") }}</td><td>{{ customer or _("Not associated") }}</td></tr>
-  <tr><td style="color:#8d95a0;">{{ _("Priority") }}</td><td>{{ doc.priority }}</td></tr>
-</table>
-<p style="margin-top:14px;color:#8d95a0;">{{ _("Message") }}</p>
-<div style="background:#f3f5f8;padding:10px 14px;border-radius:4px;border:1px solid #e5e9ee;">{{ message }}</div>
-<p style="margin-top:14px;"><a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
+<div>
+  <p>Hello,</p>
+  <p>You have a new reply on the ticket <strong>#{{ doc.name }}</strong>.</p>
+  <p><strong>Subject:</strong> {{ doc.subject }}</p>
+  <p><strong>Raised By:</strong> {{ doc.raised_by }}</p>
+  <p><strong>Priority:</strong> {{ doc.priority }}</p>
+   <div style="margin-bottom: 10px">
+    <p style="margin-bottom: 20px">Message</p>
+    <div
+      style="
+        background: #f3f5f8;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #e5e9ee;
+      "
+    >
+      {{ message }}
+    </div>
+  </div>
+  <br />
+  <p>
+    You can view and respond to this ticket by
+    <a href="{{ ticket_url }}">clicking here</a>.
+  </p>
+  <p>Regards,<br />Support Team</p>
+</div>
 """
 
     if type == "reply_via_agent":
         return """\
-<p style="color:#8d95a0;font-size:13px;margin-bottom:16px;">##- {{ _("Reply above this line") }} -##</p>
-{{ message }}
-<p style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e9ee;color:#8d95a0;font-size:13px;">{{ _("Request no.") }} {{ ticket_url.split('/')[-1] }} - <a href="{{ ticket_url }}">{{ _("Open the ticket") }}</a></p>
+<div>
+  <h2><strong>Ticket #{{ doc.name }}</strong></h2>
+  <h3>You have a new reply on this ticket</h3>
+  <br />
+  <div style="margin-bottom: 10px">
+    <h3 style="margin-bottom: 20px">Message</h3>
+    <div
+      style="
+        background: #f3f5f8;
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid #e5e9ee;
+      "
+    >
+      {{ message }}
+    </div>
+  </div>
+  <p>Please visit the customer portal to reply to this message</p>
+  <a
+    class="btn btn-primary"
+    href="{{ ticket_url }}"
+    rel="noopener noreferrer"
+    target="_blank"
+  >View in Portal</a>
+  <br />
+</div>
 """
 
 

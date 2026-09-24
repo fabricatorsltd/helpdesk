@@ -56,10 +56,15 @@
       :selections="listSelections"
       @success="listViewRef?.unselectAll()"
     />
-    <BulkMergeModal
-      v-model="showBulkMergeModal"
+    <BulkEditModal
+      v-model="showBulkEditModal"
       :selections="listSelections"
-      @success="onBulkMergeSuccess"
+      @success="reset(true)"
+    />
+    <BulkAssignModal
+      v-model="showBulkAssignModal"
+      :selections="listSelections"
+      @success="reset(true)"
     />
   </div>
 </template>
@@ -68,8 +73,10 @@
 import { LayoutHeader, ListViewBuilder } from "@/components";
 import { TicketIcon } from "@/components/icons";
 import IndicatorIcon from "@/components/icons/IndicatorIcon.vue";
+import TicketPriority from "@/components/TicketPriority.vue";
+import BulkAssignModal from "@/components/ticket-agent/BulkAssignModal.vue";
+import BulkEditModal from "@/components/ticket-agent/BulkEditModal.vue";
 import BulkReplyModal from "@/components/ticket-agent/BulkReplyModal.vue";
-import BulkMergeModal from "@/components/ticket/BulkMergeModal.vue";
 import ExportModal from "@/components/ticket/ExportModal.vue";
 import ViewBreadcrumbs from "@/components/ViewBreadcrumbs.vue";
 import { normalizeFilters } from "@/components/view-controls/filter";
@@ -81,7 +88,7 @@ import { useTicketStatusStore } from "@/stores/ticketStatus";
 import { __ } from "@/translation";
 import { View } from "@/types";
 import { isCustomerPortal, shortDuration } from "@/utils";
-import { Badge, dayjs, toast, Tooltip, usePageMeta } from "frappe-ui";
+import { Badge, dayjs, Tooltip, usePageMeta } from "frappe-ui";
 import { computed, h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -115,27 +122,31 @@ const { getStatus } = useTicketStatusStore();
 const listSelections = ref(new Set());
 
 const showBulkReplyModal = ref(false);
-const showBulkMergeModal = ref(false);
+const showBulkEditModal = ref(false);
+const showBulkAssignModal = ref(false);
+
+// Replying, assigning and editing in bulk are agent-side actions only.
+const agentOnly = () => !isCustomerPortal.value;
 
 const selectBannerActions = [
   {
-    label: __("Bulk Reply"),
-    icon: "corner-up-left",
+    label: __("Reply"),
+    icon: "lucide-corner-up-left",
+    inline: true,
+    condition: agentOnly,
     onClick: (selections: Set<string>) => {
       listSelections.value = new Set(selections);
       showBulkReplyModal.value = true;
     },
   },
   {
-    label: __("Merge"),
-    icon: "lucide-merge",
+    label: __("Assign"),
+    icon: "lucide-user-plus",
+    inline: true,
+    condition: agentOnly,
     onClick: (selections: Set<string>) => {
-      if (selections.size < 2) {
-        toast.error(__("Select at least two tickets"));
-        return;
-      }
       listSelections.value = new Set(selections);
-      showBulkMergeModal.value = true;
+      showBulkAssignModal.value = true;
     },
   },
   {
@@ -144,6 +155,15 @@ const selectBannerActions = [
     onClick: (selections: Set<string>) => {
       listSelections.value = new Set(selections);
       showExportModal.value = true;
+    },
+  },
+  {
+    label: __("Edit"),
+    icon: "lucide-pencil",
+    condition: agentOnly,
+    onClick: (selections: Set<string>) => {
+      listSelections.value = new Set(selections);
+      showBulkEditModal.value = true;
     },
   },
 ];
@@ -175,13 +195,17 @@ const options = computed(() => ({
           { class: "flex items-center gap-1.5 justify-start w-full" },
           [
             h(IndicatorIcon, { class: status?.["parsed_color"] }),
-            h("span", { class: "truncate flex-1 text-base" }, __(label)),
+            h("span", { class: "truncate flex-1 text-base" }, label),
           ]
         );
       },
     },
+    priority: {
+      custom: ({ item }) => h(TicketPriority, { priority: item }),
+    },
     agreement_status: {
       custom: ({ item }) => {
+        if (!item) return null;
         return h(Badge, {
           label: __(item),
           theme: slaStatusColorMap[item],
@@ -224,72 +248,14 @@ const options = computed(() => ({
 }));
 
 function handleResponseByField(row: any, item: string) {
-  if (!row.first_responded_on && dayjs(item).isBefore(new Date())) {
-    return h(Badge, {
-      label: __("Failed"),
-      theme: "red",
-      variant: "subtle",
-    });
+  if (!row.sla) return null; // nothing promised, so nothing to report against
+  if (row.first_responded_on) {
+    // no target means it was never breached, so responding at all fulfils it
+    const fulfilled = !item || dayjs(row.first_responded_on).isBefore(item);
+    return slaOutcomeBadge(fulfilled);
   }
-  if (row.first_responded_on && dayjs(row.first_responded_on).isBefore(item)) {
-    return h(Badge, {
-      label: __("Fulfilled"),
-      theme: "gray",
-      variant: "subtle",
-    });
-  } else if (dayjs(row.first_responded_on).isAfter(item)) {
-    return h(Badge, {
-      label: __("Failed"),
-      theme: "red",
-      variant: "subtle",
-    });
-  } else {
-    return h(
-      Tooltip,
-      {
-        text: dayjs(item).format("LLLL"),
-      },
-      h(Badge, {
-        label: shortDuration(item),
-        variant: "subtle",
-        theme: "orange",
-      })
-    );
-  }
-}
-
-function handleResolutionByField(row: any, item: string) {
-  // Nothing to show when the SLA does not commit to a resolution target.
-  if (!item) {
-    return h("span");
-  }
-  const status = getStatus(row.status) || {};
-  if (status.category === "Paused") {
-    return h(Badge, {
-      label: __("Paused"),
-      theme: "blue",
-      variant: "subtle",
-    });
-  }
-  if (row.resolution_date) {
-    const fulfilled = dayjs(row.resolution_date).isBefore(
-      dayjs(row.resolution_by)
-    );
-    return h(Badge, {
-      label: fulfilled ? __("Fulfilled") : __("Failed"),
-      theme: fulfilled ? "gray" : "red",
-      variant: "subtle",
-    });
-  }
-  // In progress but the resolution deadline has already passed.
-  if (dayjs(item).isBefore(dayjs())) {
-    return h(Badge, {
-      label: __("Failed"),
-      theme: "red",
-      variant: "subtle",
-    });
-  }
-  // In progress with a future deadline: show the live countdown.
+  if (!item) return null;
+  if (dayjs(item).isBefore(dayjs())) return slaOutcomeBadge(false);
   return h(
     Tooltip,
     {
@@ -303,9 +269,43 @@ function handleResolutionByField(row: any, item: string) {
   );
 }
 
-function onBulkMergeSuccess() {
-  listViewRef.value?.reload();
-  listViewRef.value?.unselectAll();
+function slaOutcomeBadge(fulfilled: boolean) {
+  return h(Badge, {
+    label: fulfilled ? __("Fulfilled") : __("Failed"),
+    theme: fulfilled ? "gray" : "red",
+    variant: "subtle",
+  });
+}
+
+function handleResolutionByField(row: any, item: string) {
+  if (!row.sla) return null;
+  const status = getStatus(row.status) || {};
+  if (status.category === "Paused") {
+    return h(Badge, {
+      label: __("Paused"),
+      theme: "blue",
+      variant: "subtle",
+    });
+  }
+  if (row.resolution_date) {
+    const fulfilled = !item || dayjs(row.resolution_date).isBefore(dayjs(item));
+    return slaOutcomeBadge(fulfilled);
+  }
+  if (!item) return null;
+  // In progress but the resolution deadline has already passed.
+  if (dayjs(item).isBefore(dayjs())) return slaOutcomeBadge(false);
+  // In progress with a future deadline: show the live countdown.
+  return h(
+    Tooltip,
+    {
+      text: dayjs(item).format("LLLL"),
+    },
+    h(Badge, {
+      label: shortDuration(item),
+      variant: "subtle",
+      theme: "violet",
+    })
+  );
 }
 
 async function exportRows(

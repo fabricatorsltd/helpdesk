@@ -128,22 +128,18 @@
         </div>
 
         <!-- Attachments -->
-        <div class="flex flex-wrap gap-2 px-5 my-2">
-          <AttachmentItem
-            v-for="a in attachments"
-            :key="a.file_url"
-            :label="a.file_name"
-            :url="!['MOV', 'MP4'].includes(a.file_type) ? a.file_url : null"
-          >
-            <template #suffix>
-              <FeatherIcon
-                class="h-3.5"
-                name="x"
-                @click.self.stop="removeAttachment(a)"
-              />
-            </template>
-          </AttachmentItem>
-        </div>
+        <AttachmentList
+          class="px-5 my-2"
+          :attachments="attachments"
+          @remove="removeAttachment"
+        />
+        <!-- Saved reply actions, applied once the reply is sent -->
+        <SavedReplyActions
+          ref="savedReplyActionsRef"
+          class="mx-5 my-2"
+          :ticket-id="ticketId"
+          :doctype="doctype"
+        />
         <!-- Fixed Menu -->
         <div
           class="flex justify-between overflow-scroll px-4 py-2.5 items-center border-t"
@@ -164,37 +160,36 @@
               >
                 <template #default="{ openFileSelector, uploading }">
                   {{ void (isUploading = uploading) }}
-                  <button
-                    class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
-                    @click="openFileSelector()"
-                    :disabled="uploading"
-                  >
-                    <AttachmentIcon
-                      class="h-4 w-4"
-                      style="stroke-width: 1.5 !important"
-                    />
-                  </button>
+                  <Tooltip :text="__('Attach file')">
+                    <button
+                      class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
+                      @click="openFileSelector()"
+                      :disabled="uploading"
+                    >
+                      <LoadingIndicator v-if="uploading" class="h-4 w-4" />
+                      <AttachmentIcon
+                        v-else
+                        class="h-4 w-4"
+                        style="stroke-width: 1.5 !important"
+                      />
+                    </button>
+                  </Tooltip>
                 </template>
               </FileUploader>
-              <button
-                class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
-                @click="showSavedRepliesSelectorModal = true"
-              >
-                <SavedReplyIcon class="h-4 w-4" />
-              </button>
-              <button
-                class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
-                :title="__('Insert article')"
-                @click="showInsertArticleModal = true"
-              >
-                <LucideBookOpen class="h-4 w-4" />
-              </button>
+              <Tooltip :text="__('Saved replies')">
+                <button
+                  class="flex rounded p-1 text-ink-gray-8 transition-colors focus-within:ring-0 hover:bg-surface-gray-3"
+                  @click="showSavedRepliesSelectorModal = true"
+                >
+                  <ZapIcon class="h-4 w-4" />
+                </button>
+              </Tooltip>
               <div class="h-4 w-[2px] border-s ml-1" />
             </div>
             <EditorFixedMenu :items="fullToolbar" />
           </div>
           <div class="flex items-center justify-end gap-x-2 sm:mt-0 w-[40%]">
-            <Button :label="__('Discard')" @click="handleDiscard" />
+            <Button label="Discard" @click="handleDiscard" />
             <Button
               variant="solid"
               :disabled="isDisabled"
@@ -211,10 +206,6 @@
       </div>
     </template>
   </Editor>
-  <InsertArticleModal
-    v-model="showInsertArticleModal"
-    @select="insertArticleLink"
-  />
   <SavedRepliesSelectorModal
     v-model="showSavedRepliesSelectorModal"
     :doctype="doctype"
@@ -224,15 +215,18 @@
 </template>
 
 <script setup lang="ts">
-import { AttachmentItem, InsertArticleModal, SavedRepliesSelectorModal } from "@/components";
-import { useConfigStore } from "@/stores/config";
+import { AttachmentList, SavedRepliesSelectorModal } from "@/components";
 import { buildEditorExtensions, fullToolbar } from "@/components/editor/config";
 import EmailMultiSelect from "@/components/EmailMultiSelect.vue";
+import { createDialog } from "@/components/dialogs";
 import { AttachmentIcon } from "@/components/icons";
+import SavedReplyActions from "@/components/SavedReplyActions/SavedReplyActions.vue";
 import { useTyping } from "@/composables/realtime";
 import { getUserEmailInfo } from "@/composables/useUserEmailInfo";
+import { replyComposer } from "@/pages/ticket/modalStates";
 import { useAuthStore } from "@/stores/auth";
 import { __ } from "@/translation";
+import { RenderedSavedReply } from "@/types";
 import {
   getFontFamily,
   htmlToText,
@@ -242,7 +236,13 @@ import {
   validateEmailWithZod,
 } from "@/utils";
 import { useStorage } from "@vueuse/core";
-import { FileUploader, createResource, toast } from "frappe-ui";
+import {
+  FileUploader,
+  LoadingIndicator,
+  Tooltip,
+  createResource,
+  toast,
+} from "frappe-ui";
 import { Editor, EditorContent, EditorFixedMenu } from "frappe-ui/editor";
 import { useOnboarding } from "frappe-ui/frappe";
 import {
@@ -253,7 +253,7 @@ import {
   ref,
   watch,
 } from "vue";
-import SavedReplyIcon from "./icons/SavedReplyIcon.vue";
+import ZapIcon from "~icons/lucide/zap";
 
 // ─── Props & Emits ────────────────────────────────────────────
 const props = defineProps({
@@ -398,24 +398,48 @@ async function removeAttachment(attachment) {
 }
 
 const showSavedRepliesSelectorModal = ref(false);
-const showInsertArticleModal = ref(false);
-const configStore = useConfigStore();
+const savedReplyActionsRef = ref<InstanceType<typeof SavedReplyActions>>();
 
-function insertArticleLink(article: { id: string; title: string }) {
-  const textEditor = editor.value;
-  if (!textEditor) return;
-  const href = configStore.articleUrl(article.id);
-  textEditor
-    .chain()
-    .focus()
-    .insertContent(`<a href="${href}">${article.title}</a> `)
-    .run();
+/** A reply is only replaced when another one is already applied. */
+function applySavedReplies(reply: RenderedSavedReply) {
+  const staged = savedReplyActionsRef.value?.stagedSummary();
+  if (!staged) {
+    insertSavedReply(reply);
+    return;
+  }
+  createDialog({
+    title: __("Replace saved reply"),
+    message: __(
+      'Applying "{0}" discards the reply you have now, along with its {1} action(s).',
+      [reply.title, staged.count]
+    ),
+    actions: [
+      { label: __("Cancel") },
+      {
+        label: __("Replace"),
+        variant: "solid",
+        onClick: ({ close }: { close: () => void }) => {
+          replaceSavedReply(reply);
+          close();
+        },
+      },
+    ],
+  });
 }
 
-function applySavedReplies(template: string) {
+/** First reply of a draft: added to whatever the agent has already written. */
+function insertSavedReply(reply: RenderedSavedReply) {
   const textEditor = editorRef.value?.editor;
   if (!textEditor) return;
-  textEditor.chain().focus("start").insertContent(template).run();
+  textEditor.chain().focus("start").insertContent(reply.message).run();
+  savedReplyActionsRef.value?.add(reply);
+}
+
+/** Confirmed replace: the new reply's body and actions stand alone. */
+function replaceSavedReply(reply: RenderedSavedReply) {
+  newEmail.value = reply.message + (emailSignature.value ?? "");
+  savedReplyActionsRef.value?.add(reply);
+  focusEditorAtStart();
 }
 
 const sendMail = createResource({
@@ -438,6 +462,7 @@ const sendMail = createResource({
     },
   }),
   onSuccess: () => {
+    savedReplyActionsRef.value?.submit();
     resetState();
     emit("submit");
 
@@ -448,9 +473,7 @@ const sendMail = createResource({
   debounce: 300,
 });
 
-const label = computed(() =>
-  sendMail.loading ? __("Sending...") : props.label
-);
+const label = computed(() => (sendMail.loading ? "Sending..." : props.label));
 
 const isDisabled = computed(
   () =>
@@ -513,6 +536,7 @@ function addToReply(
   focusEditorAtStart();
 }
 
+// Staged actions are left to `submit()`, which unstages them either way
 function resetState() {
   newEmail.value = emailSignature.value ? emailSignature.value : null;
   attachments.value = [];
@@ -523,6 +547,7 @@ function resetState() {
 
 function handleDiscard() {
   attachments.value = [];
+  savedReplyActionsRef.value?.clear();
   newEmail.value = getInitialContent();
   quotedContent.value = null;
   ccEmailsClone.value = [];
@@ -598,7 +623,14 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 watch(newEmail, (newValue, oldValue) => {
-  if (newValue !== oldValue && newValue) {
+  // The signature drops into an empty editor on load and on every reply. That
+  // is not the agent typing, and broadcasting it would show a typing indicator
+  // to everyone else on the ticket.
+  if (
+    newValue !== oldValue &&
+    !isContentEmpty(newValue) &&
+    !isOnlySignature(newValue)
+  ) {
     onUserType();
   }
   cachedEmail.value = isOnlySignature(newValue) ? null : newValue;
@@ -641,6 +673,9 @@ watch(
 );
 
 onMounted(() => {
+  // Published for the command palette, which cannot reach `editorRef` from
+  // module scope. See modalStates.ts.
+  replyComposer.value = applySavedReplies;
   if (quotedContent.value) {
     nextTick(() => {
       if (quotedContentRef.value) {
@@ -651,6 +686,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  replyComposer.value = null;
   cleanup();
 });
 

@@ -165,15 +165,6 @@ const portalRoutes = [
     },
   },
   {
-    path: "/my-sla",
-    name: "CustomerSla",
-    component: () => import("@/pages/CustomerSla.vue"),
-    meta: {
-      public: true,
-      auth: true,
-    },
-  },
-  {
     path: "/kb-public",
     name: "CustomerKnowledgeBase",
     component: () => import("@/pages/knowledge-base/KnowledgeBaseCustomer.vue"),

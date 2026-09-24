@@ -103,12 +103,6 @@ const settingsData = ref({
   disableSavedRepliesGlobalScope: false,
   enableOutsideHoursBanner: false,
   outsideWorkingHoursBannerMessage: "",
-  inactivityEnabled: false,
-  inactivityStatus: "",
-  inactivityReminderDays: "",
-  inactivityCloseDays: "",
-  digestEnabled: false,
-  digestHour: "",
 });
 const disableSignup = ref(false);
 
@@ -165,16 +159,6 @@ const saveSettingsResource = createResource({
           settingsData.value.enableOutsideHoursBanner,
         outside_working_hours_message:
           settingsData.value.outsideWorkingHoursBannerMessage,
-        fab_inactivity_enabled: settingsData.value.inactivityEnabled,
-        fab_inactivity_status: settingsData.value.inactivityStatus,
-        fab_inactivity_reminder_days: Number(
-          settingsData.value.inactivityReminderDays
-        ),
-        fab_inactivity_close_days: Number(
-          settingsData.value.inactivityCloseDays
-        ),
-        fab_digest_enabled: settingsData.value.digestEnabled,
-        fab_digest_hour: Number(settingsData.value.digestHour),
       },
     };
   },
@@ -211,12 +195,6 @@ const transformData = (data: any) => {
     ),
     enableOutsideHoursBanner: Boolean(data.enable_outside_hours_banner),
     outsideWorkingHoursBannerMessage: data.outside_working_hours_message || "",
-    inactivityEnabled: Boolean(data.fab_inactivity_enabled),
-    inactivityStatus: data.fab_inactivity_status,
-    inactivityReminderDays: data.fab_inactivity_reminder_days,
-    inactivityCloseDays: data.fab_inactivity_close_days,
-    digestEnabled: Boolean(data.fab_digest_enabled),
-    digestHour: data.fab_digest_hour,
   };
 };
 

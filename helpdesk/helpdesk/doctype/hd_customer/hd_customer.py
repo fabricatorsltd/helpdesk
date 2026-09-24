@@ -384,16 +384,6 @@ class HDCustomer(Document):
         if erpnext_customer_exists:
             return
 
-        # an existing billing customer with the same name: link to it instead of
-        # creating a duplicate (the string match is case-insensitive on the DB)
-        existing_customer = frappe.db.get_value(
-            "Customer", {"customer_name": self.customer_name}, "name"
-        )
-        if existing_customer:
-            frappe.db.set_value("Customer", existing_customer, "hd_customer", self.name)
-            self.db_set("erpnext_customer", existing_customer, update_modified=False)
-            return
-
         # create a new customer in ERPNext with the same name as the HD Customer and link them together
         erp_doc = frappe.get_doc(
             {
@@ -405,7 +395,7 @@ class HDCustomer(Document):
         )
         erp_doc.flags.ignore_erpnext_sync = True
         erp_doc.insert(ignore_permissions=True)
-        self.db_set("erpnext_customer", erp_doc.name, update_modified=False)
+        frappe.db.set_value("HD Customer", self.name, "erpnext_customer", erp_doc.name)
 
     def on_update(self):
         if not should_sync_with_erpnext() or self.flags.get("ignore_erpnext_sync"):

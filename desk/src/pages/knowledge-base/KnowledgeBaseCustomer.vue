@@ -2,14 +2,7 @@
   <div class="p-5 pb-10 px-10 w-full overflow-scroll items-center relative">
     <LayoutHeader>
       <template #left-header>
-        <div class="text-lg-medium text-ink-gray-9">{{ __("Knowledge Base") }}</div>
-      </template>
-      <template #right-header>
-        <Select
-          :modelValue="kbLanguage"
-          @update:modelValue="onLanguageChange"
-          :options="languageOptions"
-        />
+        <div class="text-lg-medium text-ink-gray-9">Knowledge Base</div>
       </template>
     </LayoutHeader>
     <div
@@ -20,7 +13,7 @@
           'max-w-[310px] md:max-w-[856px] !top-1 md:min-w-[856px]',
         ]"
         v-model="query"
-        :placeholder="__('Ask a question...')"
+        placeholder="Ask a question..."
         size="md"
         :autofocus="true"
       />
@@ -37,44 +30,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { usePageMeta, Select } from "frappe-ui";
+import { usePageMeta } from "frappe-ui";
 
 import { LayoutHeader } from "@/components";
 import CategoryFolderContainer from "@/components/knowledge-base/CategoryFolderContainer.vue";
 import SearchPopover from "@/components/SearchPopover.vue";
 import { capture } from "@/telemetry";
-import { __ } from "@/translation";
-import { kbLanguage, categories } from "@/stores/knowledgeBase";
-import { useAuthStore } from "@/stores/auth";
 
 const query = ref("");
-
-const languageOptions = [
-  { label: "Italiano", value: "it" },
-  { label: "English", value: "en" },
-  { label: "Français", value: "fr" },
-  { label: "Español", value: "es" },
-];
-
-// Seed the KB filter with the user's language on first view (synchronously, so
-// the category fetch in the child container already carries it).
-const authStore = useAuthStore();
-if (!kbLanguage.value) {
-  const lang = (authStore.language || "it").split(/[-_]/)[0];
-  kbLanguage.value = languageOptions.some((o) => o.value === lang) ? lang : "it";
-}
-
-function onLanguageChange(value: string) {
-  kbLanguage.value = value;
-  categories.fetch();
-}
 
 onMounted(() => {
   capture("kb_customer_page_viewed");
 });
 usePageMeta(() => {
   return {
-    title: __("Knowledge Base"),
+    title: "Knowledge Base",
   };
 });
 </script>

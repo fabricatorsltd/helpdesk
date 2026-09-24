@@ -1,33 +1,15 @@
 import { createResource } from "frappe-ui";
-import { ref } from "vue";
-
-// Customer portal KB language filter. Empty means "no filter" (staff/all);
-// the customer view seeds it with the user's language and lets them switch.
-export const kbLanguage = ref<string>("");
 
 // Title
 export const newArticle = createResource({
   url: "frappe.client.insert",
-  makeParams({
-    title,
-    content,
-    category,
-    fabVisibility,
-    fabLanguage,
-    fabCustomers,
-  }) {
+  makeParams({ title, content, category }) {
     return {
       doc: {
         doctype: "HD Article",
         title,
         content,
         category,
-        fab_visibility: fabVisibility || "Public",
-        fab_language: fabLanguage || null,
-        fab_customers:
-          fabVisibility === "Restricted"
-            ? (fabCustomers || []).map((c: string) => ({ customer: c }))
-            : [],
       },
     };
   },
@@ -107,9 +89,7 @@ export const mergeCategory = createResource({
 
 export const categories = createResource({
   url: "helpdesk.api.knowledge_base.get_categories",
-  makeParams() {
-    return { language: kbLanguage.value || undefined };
-  },
+  cache: ["categories"],
 });
 
 export const categoryName = createResource({

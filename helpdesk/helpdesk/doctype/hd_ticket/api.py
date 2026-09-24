@@ -1,35 +1,24 @@
 import json
-import re
 from datetime import timedelta
 
 import frappe
 from bs4 import BeautifulSoup
 from frappe import _
 from frappe.model.document import get_controller
-from frappe.utils import (
-    add_to_date,
-    get_datetime,
-    get_user_info_for_avatar,
-    now_datetime,
-)
+from frappe.utils import get_user_info_for_avatar, now_datetime
 from frappe.utils.caching import redis_cache
 from pypika import Criterion, Order
 
 from helpdesk.api.doc import handle_at_me_support
 from helpdesk.consts import DEFAULT_TICKET_TEMPLATE
 from helpdesk.helpdesk.doctype.hd_form_script.hd_form_script import get_form_script
-from helpdesk.helpdesk.doctype.hd_settings.helpers import (
-    get_rendered_banner_msg,
-    resolve_ticket_language,
-    use_language,
-)
+from helpdesk.helpdesk.doctype.hd_settings.helpers import get_rendered_banner_msg
 from helpdesk.helpdesk.doctype.hd_ticket_template.api import get_fields_meta
 from helpdesk.helpdesk.doctype.hd_ticket_template.api import get_one as get_template
 from helpdesk.utils import (
     agent_only,
     check_permissions,
     get_customers,
-    get_helpdesk_url,
     is_agent,
     parse_call_logs,
 )
@@ -157,8 +146,6 @@ def get_meta(template: str):
 
 
 def get_customer_criteria():
-    from helpdesk.helpdesk.doctype.hd_ticket.hd_ticket import _get_full_view_customers
-
     QBTicket = frappe.qb.DocType("HD Ticket")
     user = frappe.session.user
     conditions = [
@@ -166,14 +153,9 @@ def get_customer_criteria():
         QBTicket.raised_by == user,
         QBTicket.owner == user,
     ]
-    # Whole-customer visibility only for customers the user manages or that are
-    # configured company-wide; a plain member sees just their own tickets.
-    for c in _get_full_view_customers(user):
+    customer = get_customers(user)
+    for c in customer:
         conditions.append(QBTicket.customer == c)
-    # CC is a visibility grant: a user CC'd on a ticket sees it in their list
-    email = frappe.db.get_value("User", user, "email") or user
-    if email:
-        conditions.append(QBTicket.fab_cc.like(f"%{email}%"))
     return Criterion.any(conditions)
 
 
@@ -239,78 +221,6 @@ def get_comments(ticket: str):
     return comments
 
 
-# field word logged by hd_ticket.handle_ticket_activity -> (set message, cleared
-# message). One message per field, so each language can pick its own article.
-ACTIVITY_FIELD_MESSAGES = {
-    "status": ("set status to {0}", "cleared status"),
-    "priority": ("set priority to {0}", "cleared priority"),
-    "team": ("set team to {0}", "cleared team"),
-    "type": ("set type to {0}", "cleared type"),
-    "contact": ("set contact to {0}", "cleared contact"),
-    "SLA": ("set SLA to {0}", "cleared SLA"),
-}
-ACTIVITY_FIELDS = "|".join(ACTIVITY_FIELD_MESSAGES)
-
-
-def translate_activity(action: str) -> str:
-    """Rebuild a stored activity action in the session language.
-
-    Actions are written in English at event time (see log_ticket_activity), so
-    the known shapes are parsed back into their parts and reassembled from
-    translatable strings. Unknown shapes are returned as they are.
-    """
-    if not action:
-        return action
-
-    match = re.fullmatch(rf"set ({ACTIVITY_FIELDS}) to (.+)", action)
-    if match:
-        field, value = match.groups()
-        # statuses are translatable, the other values are user data
-        return _(ACTIVITY_FIELD_MESSAGES[field][0]).format(
-            _(value) if field == "status" else value
-        )
-
-    match = re.fullmatch(rf"cleared ({ACTIVITY_FIELDS})", action)
-    if match:
-        return _(ACTIVITY_FIELD_MESSAGES[match.group(1)][1])
-
-    match = re.fullmatch(r"split the ticket from #(.+)", action)
-    if match:
-        return _("split the ticket from #{0}").format(match.group(1))
-
-    match = re.fullmatch(
-        r"automatically closed the ticket after (\d+) days? of inactivity", action
-    )
-    if match:
-        return _("automatically closed the ticket after {0} days of inactivity").format(
-            match.group(1)
-        )
-
-    if action == "sent the customer an inactivity reminder":
-        return _("sent the customer an inactivity reminder")
-
-    match = re.fullmatch(
-        r"closed the ticket after (\d+) days? without a reply from the customer", action
-    )
-    if match:
-        return _(
-            "closed the ticket after {0} days without a reply from the customer"
-        ).format(match.group(1))
-
-    parts = []
-    for part in action.split(" & "):
-        match = re.fullmatch(r"(assigned|unassigned) (.+)", part)
-        if not match:
-            return action
-        verb, users = match.groups()
-        parts.append(
-            (_("assigned {0}") if verb == "assigned" else _("unassigned {0}")).format(
-                users
-            )
-        )
-    return " & ".join(parts)
-
-
 def get_history(ticket: str):
     if not frappe.has_permission("HD Ticket Activity", "read"):
         return []
@@ -326,7 +236,6 @@ def get_history(ticket: str):
     history = history.run(as_dict=True)
     for h in history:
         h.user = get_user_info_for_avatar(h.owner)
-        h.label = translate_activity(h.action)
     return history
 
 
@@ -413,13 +322,6 @@ def get_attachments(doctype, name):
     )
 
 
-def merged_ticket_status() -> str:
-    """A merge is not a closure: give it its own status where the site has the
-    record, so lists and pickers can tell the two apart. Sites without it
-    (upstream, or before fab_helpdesk migrates) keep the old behaviour."""
-    return "Merged" if frappe.db.exists("HD Ticket Status", "Merged") else "Closed"
-
-
 @frappe.whitelist()
 @agent_only
 def merge_ticket(source: str, target: str):
@@ -458,17 +360,14 @@ def merge_ticket(source: str, target: str):
 
     doc = frappe.get_doc("HD Ticket", source)
 
-    doc.status = merged_ticket_status()
+    doc.status = "Closed"
     doc.is_merged = 1
     doc.merged_with = target
     doc.save()
 
-    with use_language(resolve_ticket_language(doc)):
-        message = _(
-            "This ticket (#{0}) has been merged with ticket <a href = '/helpdesk/tickets/{1}'>#{1}</a>."
-        ).format(source, target)
-    # the one reply still allowed out of a merged ticket: the notice itself
-    doc.flags.replying_about_merge = True
+    message = _(
+        "This ticket (#{0}) has been merged with ticket <a href = '/helpdesk/tickets/{1}'>#{1}</a>."
+    ).format(source, target)
     controller.reply_via_agent(
         doc,
         message=message,
@@ -478,11 +377,11 @@ def merge_ticket(source: str, target: str):
     c = frappe.new_doc("HD Ticket Comment")
     c.commented_by = frappe.session.user
     c.reference_ticket = target
-    source_link = get_helpdesk_url("/helpdesk/tickets/" + str(source))
-    target_link = get_helpdesk_url("/helpdesk/tickets/" + str(target))
-    # Stored in English with a stable shape: CommentBox.vue detects it and
-    # renders it in the reader's language.
-    c.content = f"Ticket <a href={source_link}> #{source}</a>  has been merged with ticket #{target}."
+    source_link = frappe.utils.get_url("/helpdesk/tickets/" + str(source))
+    target_link = frappe.utils.get_url("/helpdesk/tickets/" + str(target))
+    c.content = _(
+        f"Ticket <a href={source_link}> #{source}</a>  has been merged with ticket #{target}."
+    )
     c.save()
 
 
@@ -499,10 +398,6 @@ def duplicate_list_retain_timestamp(doctype, activities: list, target: str, cont
 
         if doctype == "Communication":
             duplicate_doc.reference_name = target
-            # Inbound mails are stored with unvalidated addresses ("addr <addr>");
-            # the flag only skips validate_email, as the original insert did.
-            if original_doc.sent_or_received == "Received":
-                duplicate_doc.flags.in_receive = True
             attachments = get_attachments(
                 "Communication",
                 activity,
@@ -606,7 +501,7 @@ def split_ticket(subject: str, communication_id: str):
         update_modified=False,
     )
 
-    new_ticket_link = get_helpdesk_url("/helpdesk/tickets/" + str(new_ticket))
+    new_ticket_link = frappe.utils.get_url("/helpdesk/tickets/" + str(new_ticket))
 
     controller = get_controller("HD Ticket")
     controller.reply_via_agent(
@@ -763,23 +658,25 @@ def get_ticket_contact(ticket: str):
     frappe.has_permission("HD Ticket", "read", ticket, throw=True)
     if not frappe.db.exists("HD Ticket", ticket):
         return None
-    contact = frappe.db.get_value("HD Ticket", ticket, "contact")
-    if not contact:
-        raised_by = frappe.db.get_value("HD Ticket", ticket, "raised_by")
-        return {
+    contact, raised_by = frappe.db.get_value(
+        "HD Ticket", ticket, ["contact", "raised_by"]
+    )
+    if contact:
+        data = frappe.db.get_value(
+            "Contact",
+            contact,
+            ["name", "email_id", "phone", "mobile_no", "image"],
+            as_dict=1,
+        )
+    else:
+        data = {
             "email_id": raised_by,
             "name": raised_by.split("@")[0],
             "phone": "",
             "mobile_no": "",
             "image": "",
         }
-
-    return frappe.db.get_value(
-        "Contact",
-        contact,
-        ["name", "email_id", "phone", "mobile_no", "image"],
-        as_dict=1,
-    )
+    return data
 
 
 @frappe.whitelist()
@@ -881,23 +778,9 @@ def get_ticket_assignees(ticket: str) -> list[dict]:
 
 
 def show_banner_next_day(ticket):
-    sla = ticket.get_sla()
-    working_hours = sla.get_working_hours()
-    now = now_datetime()
-    creation_date = get_datetime(ticket.creation)
-    next_date = add_to_date(creation_date, days=1)
-    next_date_day_name = next_date.strftime("%A")
-    if next_date_day_name not in working_hours:
-        return True
-
-    start_time = working_hours[next_date_day_name][0]
-
-    next_day_start_datetime = (
-        next_date.replace(hour=0, minute=0, second=0, microsecond=0) + start_time
-    )
-    if now > next_day_start_datetime:
-        return False
-    return True
+    """Show the banner until the first working day after the ticket was raised begins."""
+    next_start = ticket.get_sla().get_next_working_day_start(ticket.creation)
+    return next_start is None or now_datetime() <= next_start
 
 
 @frappe.whitelist()
